@@ -1,0 +1,92 @@
+[
+ {
+  "name": "os_mezczyzna",
+  "prompt": "an adult man visitor, short brown hair, green casual jacket, blue jeans, sneakers, full body character standing upright in A-pose with arms held slightly away from the body and legs slightly apart, realistic natural human proportions, single character, no base, no background, game asset",
+  "texture": "an adult man visitor, short brown hair, green casual jacket, blue jeans, sneakers, realistic clothing fabric, natural skin, subtle hand-painted stylized texture, small natural eyes, calm friendly face, muted natural colors, no cartoon features",
+  "poly": 16000
+ },
+ {
+  "name": "os_kobieta",
+  "prompt": "an adult woman visitor, long dark hair in a ponytail, light yellow summer blouse, beige trousers, small backpack, full body character standing upright in A-pose with arms held slightly away from the body and legs slightly apart, realistic natural human proportions, single character, no base, no background, game asset",
+  "texture": "an adult woman visitor, long dark hair in a ponytail, light yellow summer blouse, beige trousers, small backpack, realistic clothing fabric, natural skin, subtle hand-painted stylized texture, small natural eyes, calm friendly face, muted natural colors, no cartoon features",
+  "poly": 16000
+ },
+ {
+  "name": "os_chlopiec",
+  "prompt": "a six year old boy, short blond hair, red t-shirt, dark blue shorts, sneakers, full body character standing upright in A-pose with arms held slightly away from the body and legs slightly apart, realistic natural human proportions, single character, no base, no background, game asset",
+  "texture": "a six year old boy, short blond hair, red t-shirt, dark blue shorts, sneakers, realistic clothing fabric, natural skin, subtle hand-painted stylized texture, small natural eyes, calm friendly face, muted natural colors, no cartoon features",
+  "poly": 16000
+ },
+ {
+  "name": "os_dziewczynka",
+  "prompt": "a six year old girl, brown hair in two pigtails, light blue dress, white sneakers, full body character standing upright in A-pose with arms held slightly away from the body and legs slightly apart, realistic natural human proportions, single character, no base, no background, game asset",
+  "texture": "a six year old girl, brown hair in two pigtails, light blue dress, white sneakers, realistic clothing fabric, natural skin, subtle hand-painted stylized texture, small natural eyes, calm friendly face, muted natural colors, no cartoon features",
+  "poly": 16000
+ },
+ {
+  "name": "os_babcia",
+  "prompt": "an elderly woman, grey hair in a bun, glasses, lilac cardigan, long grey skirt, full body character standing upright in A-pose with arms held slightly away from the body and legs slightly apart, realistic natural human proportions, single character, no base, no background, game asset",
+  "texture": "an elderly woman, grey hair in a bun, glasses, lilac cardigan, long grey skirt, realistic clothing fabric, natural skin, subtle hand-painted stylized texture, small natural eyes, calm friendly face, muted natural colors, no cartoon features",
+  "poly": 16000
+ },
+ {
+  "name": "os_opiekun",
+  "prompt": "a zookeeper man, khaki safari shirt and shorts, wide brim safari hat, brown boots, full body character standing upright in A-pose with arms held slightly away from the body and legs slightly apart, realistic natural human proportions, single character, no base, no background, game asset",
+  "texture": "a zookeeper man, khaki safari shirt and shorts, wide brim safari hat, brown boots, realistic clothing fabric, natural skin, subtle hand-painted stylized texture, small natural eyes, calm friendly face, muted natural colors, no cartoon features",
+  "poly": 16000
+ },
+ {
+  "name": "os_sprzatacz",
+  "prompt": "a park cleaner man, orange high visibility vest over grey work overalls, grey cap, work gloves, full body character standing upright in A-pose with arms held slightly away from the body and legs slightly apart, realistic natural human proportions, single character, no base, no background, game asset",
+  "texture": "a park cleaner man, orange high visibility vest over grey work overalls, grey cap, work gloves, realistic clothing fabric, natural skin, subtle hand-painted stylized texture, small natural eyes, calm friendly face, muted natural colors, no cartoon features",
+  "poly": 16000
+ },
+ {
+  "name": "os_dostawca",
+  "prompt": "a delivery man, blue courier uniform shirt and trousers, blue baseball cap, full body character standing upright in A-pose with arms held slightly away from the body and legs slightly apart, realistic natural human proportions, single character, no base, no background, game asset",
+  "texture": "a delivery man, blue courier uniform shirt and trousers, blue baseball cap, realistic clothing fabric, natural skin, subtle hand-painted stylized texture, small natural eyes, calm friendly face, muted natural colors, no cartoon features",
+  "poly": 16000
+ },
+ {
+  "name": "os_weterynarz",
+  "prompt": "a female veterinarian, white medical coat over green scrubs, hair tied back, stethoscope around the neck, full body character standing upright in A-pose with arms held slightly away from the body and legs slightly apart, realistic natural human proportions, single character, no base, no background, game asset",
+  "texture": "a female veterinarian, white medical coat over green scrubs, hair tied back, stethoscope around the neck, realistic clothing fabric, natural skin, subtle hand-painted stylized texture, small natural eyes, calm friendly face, muted natural colors, no cartoon features",
+  "poly": 16000
+ },
+ {
+  "name": "os_robotnik",
+  "prompt": "a construction worker man, yellow hard hat, blue denim overalls, checked shirt, work boots, full body character standing upright in A-pose with arms held slightly away from the body and legs slightly apart, realistic natural human proportions, single character, no base, no background, game asset",
+  "texture": "a construction worker man, yellow hard hat, blue denim overalls, checked shirt, work boots, realistic clothing fabric, natural skin, subtle hand-painted stylized texture, small natural eyes, calm friendly face, muted natural colors, no cartoon features",
+  "poly": 16000
+ },
+ {
+  "name": "auto_osobowe",
+  "prompt": "a compact family hatchback car, light blue body, clean simple shapes, realistic proportions, four wheels, closed doors, single vehicle, no base, no background, no people, game asset",
+  "texture": "a compact family hatchback car, light blue body, clean painted metal, dark windows, subtle hand-painted stylized texture, muted natural colors",
+  "poly": 14000
+ },
+ {
+  "name": "auto_suv",
+  "prompt": "a small family SUV car, dark red body, clean simple shapes, realistic proportions, four wheels, closed doors, single vehicle, no base, no background, no people, game asset",
+  "texture": "a small family SUV car, dark red body, clean painted metal, dark windows, subtle hand-painted stylized texture, muted natural colors",
+  "poly": 14000
+ },
+ {
+  "name": "auto_autobus",
+  "prompt": "a yellow school bus, long body, many side windows, clean simple shapes, realistic proportions, four wheels, closed doors, single vehicle, no base, no background, no people, game asset",
+  "texture": "a yellow school bus, long body, many side windows, clean painted metal, dark windows, subtle hand-painted stylized texture, muted natural colors",
+  "poly": 14000
+ },
+ {
+  "name": "auto_karetka",
+  "prompt": "a veterinary ambulance van, white body with a green stripe and a green cross sign, light bar on the roof, clean simple shapes, realistic proportions, four wheels, closed doors, single vehicle, no base, no background, no people, game asset",
+  "texture": "a veterinary ambulance van, white body with a green stripe and a green cross sign, light bar on the roof, clean painted metal, dark windows, subtle hand-painted stylized texture, muted natural colors",
+  "poly": 14000
+ },
+ {
+  "name": "auto_radiowoz",
+  "prompt": "a police patrol car sedan, white and dark blue body, light bar on the roof, clean simple shapes, realistic proportions, four wheels, closed doors, single vehicle, no base, no background, no people, game asset",
+  "texture": "a police patrol car sedan, white and dark blue body, light bar on the roof, clean painted metal, dark windows, subtle hand-painted stylized texture, muted natural colors",
+  "poly": 14000
+ }
+]

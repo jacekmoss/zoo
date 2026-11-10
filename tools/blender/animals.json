@@ -1,0 +1,21 @@
+{
+ "zyrafa":     {"h": 140, "gait": "pace"},
+ "krolik":     {"h": 38, "gait": "trot", "stride": 0.5},
+ "pingwin":    {"h": 46, "kind": "biped", "waddle": 0.1, "stride": 0.5},
+ "flaming":    {"h": 80, "kind": "biped"},
+ "zolw":       {"h": 24, "stride": 0.5, "tail": false},
+ "malpa":      {"h": 46},
+ "foka":       {"h": 28, "kind": "slider"},
+ "zebra":      {"h": 80},
+ "kangur":     {"h": 70, "kind": "hopper"},
+ "lew":        {"h": 62},
+ "wielblad":   {"h": 102, "gait": "pace"},
+ "krokodyl":   {"h": 26, "tail": false},
+ "niedzwiedz": {"h": 60},
+ "tygrys":     {"h": 58},
+ "slon":       {"h": 98, "stride": 0.34},
+ "hipopotam":  {"h": 60, "stride": 0.36},
+ "nosorozec":  {"h": 64, "stride": 0.36},
+ "panda":      {"h": 58, "stride": 0.36},
+ "koala":      {"h": 42}
+}

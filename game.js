@@ -94,7 +94,12 @@
   const sprName = (t) => TYPES[t].kind === 'kiosk' ? 'kiosk_' + t : t;
 
   const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
+  const ctx2d = canvas.getContext('2d');
+  // Świat rysuje karta graficzna (gl2d.js) na osobnym płótnie pod spodem; napisy i interfejs zostają na płótnie 2D.
+  // „ctx” wskazuje na to, po czym akurat rysujemy: G w czasie rysowania świata, ctx2d poza nim.
+  const wcanvas = document.getElementById('world');
+  const G = (window.ZooGL && !/[?&]bezgl/.test(location.search) && window.ZooGL.create(wcanvas, { texScale: (navigator.deviceMemory || 8) <= 2 ? 0.5 : 1 })) || null;
+  let ctx = ctx2d;
   // DPR_CAP: gdy klatki są wolne (słabszy tablet), gra sama obniża rozdzielczość rysowania (zob. frame).
   let DPR_CAP = 2, slowT = 0;
   let DPR = 1, cw = 1280, ch = 800, u = 1, UW = 1280, UH = 800;
@@ -103,6 +108,7 @@
     cw = window.innerWidth; ch = window.innerHeight;
     canvas.width = Math.round(cw * DPR); canvas.height = Math.round(ch * DPR);
     canvas.style.width = cw + 'px'; canvas.style.height = ch + 'px';
+    wcanvas.width = canvas.width; wcanvas.height = canvas.height; wcanvas.style.width = cw + 'px'; wcanvas.style.height = ch + 'px';
     u = Math.min(cw / 1280, ch / 800); UW = cw / u; UH = ch / u;
     camSnap = true; TBG = null; TFG = null;
     if (window.ZOO_LOOK) VIGN = window.ZOO_LOOK.makeVignette(cw, ch);
@@ -188,6 +194,7 @@
   // Wersje pomniejszone (mipmapy): duże płótno rysowane w małej skali jest drogie i ziarniste, więc bierzemy kopię
   // o rozdzielczości zbliżonej do tej na ekranie. Kopie powstają raz, przy pierwszej potrzebie.
   function mip(p, s) {
+    if (ctx.isGL) return p.c;                  // karta graficzna ma własne mipmapy
     const m = ctx.getTransform(), need = Math.hypot(m.a, m.b) * s;
     if (!p.mips) p.mips = [p.c];
     let i = 0, k = p.c.width / p.w;
@@ -209,7 +216,7 @@
     ctx.drawImage(p.c, bx + (bw - w) / 2, by + (bh - h) / 2, w, h);
   }
   const LOOK = window.ZOO_LOOK;
-  let PAT = {}, MOTTLE = null, VIGN = null, PATIO = null, CLOUD = null;
+  let PAT = {}, PAT2D = {}, MOTTLE = null, VIGN = null, PATIO = null, CLOUD = null;
   const ENC = {}, TREE_C = {};
   const encOf = (b) => ENC[b] || (ENC[b] = LOOK.makeEnclosure(b));
   // Grafika 3D (sprites/index.js przez animals.js): wybieg zwierzęcia, wybieg biomu, obrazki budynków.
@@ -220,8 +227,9 @@
   function applyTex() {
     const T = window.ZOO_ANIMALS && window.ZOO_ANIMALS.TEX3D; if (!T || !window.DOMMatrix) return;
     Object.entries(T).forEach(([k, t]) => {
-      const p = ctx.createPattern(t.im, 'repeat'), q = t.tile / t.im.width / Math.SQRT2;
-      p.setTransform(new DOMMatrix([q, q / 2, -q, q / 2, 0, 0])); PAT[k.slice(4)] = p;
+      const q = t.tile / t.im.width / Math.SQRT2, M = new DOMMatrix([q, q / 2, -q, q / 2, 0, 0]);
+      const p2 = ctx2d.createPattern(t.im, 'repeat'); p2.setTransform(M); PAT2D[k.slice(4)] = p2;
+      if (G) { const p = G.createPattern(t.im); p.setTransform(M); PAT[k.slice(4)] = p; } else PAT[k.slice(4)] = p2;
     });
     terrainDirty = true;
   }
@@ -241,7 +249,7 @@
   }
   const treeOf = (kind, i) => { const k = kind + (i % 3); return TREE_C[k] || (TREE_C[k] = OBJ3D()[kind] || LOOK.makeTree(kind, i % 3 + 1)); };
   function makePatterns() {
-    PAT = LOOK.makePatterns(ctx); applyTex(); MOTTLE = LOOK.makeMottle(4); PATIO = LOOK.makePatio(); CLOUD = LOOK.makeCloudShadow(3);
+    PAT2D = LOOK.makePatterns(ctx2d); PAT = Object.assign({}, PAT2D); applyTex(); MOTTLE = LOOK.makeMottle(4); PATIO = LOOK.makePatio(); CLOUD = LOOK.makeCloudShadow(3);
   }
   function blit(p, x, y, s = 1) { ctx.drawImage(mip(p, s), x + p.x * s, y + p.y * s, p.w * s, p.h * s); }
   const CLOUDS = [{ x: -900, y: 200, s: 2.6, v: 14 }, { x: 300, y: 650, s: 3.2, v: 11 }, { x: 1300, y: 50, s: 2.2, v: 16 }];
@@ -1559,8 +1567,14 @@
     return g.dir || 1;
   }
   function drawWorld() {
+    if (G) { ctx = G; G.begin(0.353, 0.478, 0.247); }
+    try { drawWorldBase(); } finally { if (G) { G.end(); ctx = ctx2d; } }
+    drawWorldTop();
+  }
+  const camTransform = () => ctx.setTransform(DPR * cam.s, 0, 0, DPR * cam.s, DPR * (cw / 2 - cam.x * cam.s), DPR * (ch / 2 - cam.y * cam.s));
+  function drawWorldBase() {
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    ctx.fillStyle = '#5a7a3f'; ctx.fillRect(0, 0, cw, ch);
+    if (!G) { ctx.fillStyle = '#5a7a3f'; ctx.fillRect(0, 0, cw, ch); }
     ctx.setTransform(DPR * cam.s, 0, 0, DPR * cam.s, DPR * (cw / 2 - cam.x * cam.s), DPR * (ch / 2 - cam.y * cam.s));
     const a = s2w(0, 0), b = s2w(cw, ch);
     ctx.fillStyle = PAT.wild; ctx.fillRect(a.x, a.y, b.x - a.x, b.y - a.y);
@@ -1677,7 +1691,13 @@
     ctx.globalAlpha = 0.32;
     CLOUDS.forEach((c) => { const x = ((c.x + time * c.v) % 5200 + 5200) % 5200 - 2600; ctx.drawImage(CLOUD, x, c.y, 420 * c.s, 210 * c.s); });
     ctx.globalAlpha = 1;
-    // warstwa wierzchnia
+    drawSky();
+    if (VIGN) { ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.drawImage(VIGN, 0, 0, cw, ch); }
+  }
+  // Warstwa wierzchnia świata (dymki, plusy, tabliczki, paski postępu): zwykłe płótno 2D nad światem.
+  function drawWorldTop() {
+    camTransform();
+    const buy = buyablePlots();
     S.plots.forEach((k) => QUADS.forEach((_, q) => { const key = placeKey(k, q); if (!S.builds[key] && !quadBlocked(key)) drawPlus(key); }));
     Object.keys(S.clear).forEach((tk) => { const j = S.clear[tk], [x, y] = tk.split(',').map(Number), w = g2w(x + 0.5, y + 0.5); ringProgress(w.x, w.y - 44, 15, 1 - j.t / j.T, j.m ? C.gold : '#efe7d4'); });
     dust.forEach((d) => { const k = d.t / 0.8; ctx.globalAlpha = 0.5 * (1 - k); ctx.fillStyle = '#d8ccae'; ctx.beginPath(); ctx.arc(d.wx, d.wy - k * 34, 7 + k * 16, 0, 7); ctx.fill(); ctx.globalAlpha = 1; });
@@ -1708,8 +1728,7 @@
     if (S.esc) { const w = g2w(S.esc.gx, S.esc.gy), y = w.y - 92 + Math.sin(time * 6) * 4; bubble(w.x, y, 24); ctx.fillStyle = '#c64a42'; ctx.fillRect(w.x - 3.5, y - 15, 7, 19); ctx.beginPath(); ctx.arc(w.x, y + 11, 4.2, 0, 7); ctx.fill(); }
     if (S.wish) { const p = wishBubble(); drawWish(p.x, p.y, S.wish); }
     minus.forEach((m) => { const k = m.t / 0.9; ctx.globalAlpha = 1 - k; txt('−' + (m.val || 1), m.wx, m.wy - k * 30, 30, C.light); ctx.globalAlpha = 1; });
-    drawSky();
-    if (VIGN) { ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.drawImage(VIGN, 0, 0, cw, ch); }
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   }
   function drawGate() {
     if (OBJ3D().brama) { const m = g2w(7.5, BY + 0.9); spr('brama', m.x, m.y, 0.85); return; }
@@ -1868,7 +1887,7 @@
       const list = Object.keys(S.obst).filter((k) => S.obst[k] === kind && !S.clear[k]).map((k) => k.split(',').map(Number));
       if (!list.length) return;
       blobsPath(g, list, 86, 44); g.fillStyle = TERR[kind]; g.fill();
-      blobsPath(g, list, 74, 38); g.fillStyle = PAT[kind]; g.fill();
+      blobsPath(g, list, 74, 38); g.fillStyle = PAT2D[kind]; g.fill();
       list.forEach(([x, y]) => {
         const w = g2w(x + 0.5, y + 0.5), h = tHash(x, y);
         if (kind === 'bloto') { g.strokeStyle = '#a3a35a'; g.lineWidth = 1.6; for (let i = 0; i < 7; i++) { const a = (h * 100 + i * 2.4) % 6.28, px = w.x + Math.cos(a) * (12 + i * 5), py = w.y + Math.sin(a) * (6 + i * 2.4); g.beginPath(); g.moveTo(px, py); g.lineTo(px + (i % 3 - 1) * 2, py - 12 - h * 8); g.stroke(); } }
@@ -1876,7 +1895,7 @@
         if (kind === 'piach') { g.strokeStyle = 'rgba(140,110,60,.35)'; g.lineWidth = 1.3; for (let i = 0; i < 2; i++) { const py = w.y - 8 + i * 13; g.beginPath(); g.moveTo(w.x - 32, py + h * 6); g.quadraticCurveTo(w.x, py - 7, w.x + 32, py + h * 3); g.stroke(); } }
       });
     });
-    terrainDirty = false;
+    terrainDirty = false; if (G) G.touch(TL.c);
   }
   function drawTerrainLayer() {
     if (terrainDirty || !TL) renderTerrain();
@@ -2831,6 +2850,7 @@
     else { const k = 1 - Math.pow(0.002, dt); cam.x = lerp(cam.x, tg.x, k); cam.y = lerp(cam.y, tg.y, k); cam.s = lerp(cam.s, tg.s, k); }
     ctx.imageSmoothingQuality = 'low';   // ostrość zapewniają mipmapy; tryb 'high' był bardzo kosztowny
     if (titleOut > 0) titleOut -= dt;
+    ctx2d.setTransform(1, 0, 0, 1, 0, 0); ctx2d.clearRect(0, 0, canvas.width, canvas.height);
     const t0 = performance.now(); if ((S.scene !== 'title' && S.scene !== 'slots') || titleOut > 0) drawWorld(); const t1 = performance.now(); drawUI(); const t2 = performance.now();
     PERF.w = PERF.w * 0.95 + (t1 - t0) * 0.05; PERF.u = PERF.u * 0.95 + (t2 - t1) * 0.05;
     // płynność: średnio wolniej niż ~40 kl./s przez 2 s → rysujemy w niższej rozdzielczości (najniżej 1 piksel na punkt)
@@ -2850,7 +2870,7 @@
 
   window.__zoo = {
     S, RT, tick, MAPS, openSlot, enterMap, makeSick, callPolice, freeVet, rateTarget, spawnGuest, parkSlots, buyPark, buildPark, orderClear, build, toggleBin, slotInfo, deleteSlot, slotCards, bubbleHit, freeTileAt, TYPES, g2w, w2s, tkey, placeCenter, plotPrice, buyablePlots, missingRoute, attraction, spawnEvery, ticket, unlocked, saveNow, recompute,
-    hint: () => hint, idle: () => idle, cam, PERF, view, contentBox,
+    hint: () => hint, idle: () => idle, cam, PERF, view, contentBox, glStats: () => G ? { draws: G.stats.draws, verts: G.stats.verts, texMB: Math.round(G.stats.texBytes / 1048576), tex: G.stats.texCount, dpr: DPR } : null,
     timers(v) {
       if (v) { if ('hunger' in v) hungerTimer = v.hunger; if ('wish' in v) wishTimer = v.wish; if ('show' in v) showTimer = v.show; if ('esc' in v) escTimer = v.esc; if ('rain' in v) rainTimer = v.rain; if ('bus' in v) busTimer = v.bus; }
       return { hunger: hungerTimer, wish: wishTimer, show: showTimer, esc: escTimer, rain: rainTimer, bus: busTimer };
