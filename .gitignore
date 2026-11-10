@@ -1,0 +1,6 @@
+models/
+renders/
+ChatGPT Image*.png
+tools/__pycache__/
+node_modules/
+*.blend1

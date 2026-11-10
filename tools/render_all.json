@@ -1,0 +1,322 @@
+{
+ "zwierzeta": {
+  "zyrafa": {
+   "h": 140,
+   "swing": 0.34,
+   "pace": true,
+   "px": 3
+  },
+  "krolik": {
+   "h": 38,
+   "swing": 0.2,
+   "px": 3
+  },
+  "pingwin": {
+   "h": 46,
+   "biped": true,
+   "swing": 0.22,
+   "waddle": 0.12,
+   "px": 3
+  },
+  "flaming": {
+   "h": 80,
+   "biped": true,
+   "swing": 0.3,
+   "px": 3
+  },
+  "zolw": {
+   "h": 24,
+   "swing": 0.3,
+   "tail": false,
+   "px": 3
+  },
+  "malpa": {
+   "h": 46,
+   "swing": 0.4,
+   "px": 3
+  },
+  "foka": {
+   "h": 28,
+   "legs": false,
+   "wave": 0.02,
+   "px": 3
+  },
+  "zebra": {
+   "h": 80,
+   "swing": 0.4,
+   "px": 3
+  },
+  "kangur": {
+   "h": 70,
+   "legs": false,
+   "px": 3
+  },
+  "lew": {
+   "h": 62,
+   "swing": 0.4,
+   "px": 3
+  },
+  "wielblad": {
+   "h": 102,
+   "swing": 0.34,
+   "pace": true,
+   "px": 3
+  },
+  "krokodyl": {
+   "h": 26,
+   "legs": false,
+   "wave": 0.012,
+   "tail": false,
+   "px": 3
+  },
+  "niedzwiedz": {
+   "h": 60,
+   "swing": 0.36,
+   "px": 3
+  },
+  "tygrys": {
+   "h": 58,
+   "swing": 0.4,
+   "px": 3
+  },
+  "slon": {
+   "h": 98,
+   "swing": 0.28,
+   "tail": false,
+   "legZ": 0.03,
+   "px": 3
+  },
+  "hipopotam": {
+   "h": 60,
+   "swing": 0.3,
+   "px": 3
+  },
+  "nosorozec": {
+   "h": 64,
+   "swing": 0.32,
+   "px": 3
+  },
+  "panda": {
+   "h": 58,
+   "swing": 0.28,
+   "legZ": 0.03,
+   "px": 3
+  },
+  "koala": {
+   "h": 42,
+   "swing": 0.34,
+   "px": 3
+  }
+ },
+ "wybiegi": {
+  "zyrafa": {
+   "model": "wybieg_zyrafa",
+   "block": [
+    [
+     -45,
+     -12,
+     22,
+     12
+    ],
+    [
+     30,
+     -25,
+     24,
+     12
+    ],
+    [
+     42,
+     6,
+     20,
+     10
+    ]
+   ],
+   "top": 230
+  },
+  "_laka": {
+   "model": "wyb_laka",
+   "top": 230
+  },
+  "_sawanna": {
+   "model": "wyb_sawanna",
+   "top": 230,
+   "block": [
+    [
+     -50,
+     -18,
+     18,
+     10
+    ],
+    [
+     45,
+     -22,
+     32,
+     14
+    ]
+   ]
+  },
+  "_pustynia": {
+   "model": "wyb_pustynia",
+   "block": [
+    [
+     -65,
+     -35,
+     25,
+     14
+    ],
+    [
+     35,
+     -30,
+     40,
+     18
+    ]
+   ],
+   "top": 230
+  },
+  "_lod": {
+   "model": "wyb_lod",
+   "pool": [
+    -10,
+    2,
+    30,
+    12
+   ],
+   "block": [
+    [
+     40,
+     -35,
+     22,
+     12
+    ],
+    [
+     55,
+     0,
+     14,
+     14
+    ]
+   ],
+   "top": 230
+  },
+  "_staw": {
+   "model": "wyb_staw",
+   "pool": [
+    -17,
+    7,
+    62,
+    17
+   ],
+   "top": 230
+  },
+  "_bambusy": {
+   "model": "wyb_bambusy",
+   "top": 230,
+   "align": false
+  },
+  "_las": {
+   "model": "wyb_las",
+   "top": 230
+  }
+ },
+ "obiekty": {
+  "kiosk_lody": {
+   "model": "b3_kiosk_lody",
+   "fill": 0.86
+  },
+  "kiosk_woda": {
+   "model": "b3_kiosk_woda",
+   "fill": 0.86
+  },
+  "kiosk_frytki": {
+   "model": "b3_kiosk_frytki",
+   "fill": 0.86
+  },
+  "kiosk_popcorn": {
+   "model": "b3_kiosk_popcorn",
+   "fill": 0.86
+  },
+  "kiosk_sok": {
+   "model": "b3_kiosk_sok",
+   "fill": 0.86
+  },
+  "kiosk_hotdog": {
+   "model": "b3_kiosk_hotdog",
+   "fill": 0.86
+  },
+  "kiosk_wata": {
+   "model": "b3_kiosk_wata",
+   "fill": 0.86
+  },
+  "kiosk_pizza": {
+   "model": "b3_kiosk_pizza",
+   "fill": 0.86
+  },
+  "opiekun": {
+   "model": "b3_dom_opiekun",
+   "fill": 0.93
+  },
+  "sprzatacz": {
+   "model": "b3_dom_sprzatacz",
+   "fill": 0.93
+  },
+  "dostawca": {
+   "model": "b3_dom_dostawca",
+   "fill": 0.93
+  },
+  "wet": {
+   "model": "b3_lecznica",
+   "fill": 0.97
+  },
+  "ogrod": {
+   "model": "b3_fun_ogrod",
+   "fill": 1.02
+  },
+  "fontanna": {
+   "model": "b3_fun_fontanna",
+   "fill": 1.02
+  },
+  "plac": {
+   "model": "b3_fun_plac",
+   "fill": 1.02
+  },
+  "karuzela": {
+   "model": "b3_fun_karuzela",
+   "fill": 0.94
+  },
+  "akwarium": {
+   "model": "b3_fun_akwarium",
+   "fill": 0.95
+  },
+  "brama": {
+   "model": "b3_o_brama",
+   "fill": 1.13
+  },
+  "drzewo": {
+   "model": "b3_o_drzewo",
+   "fill": 0.69
+  },
+  "sosna": {
+   "model": "b3_o_sosna",
+   "fill": 0.69
+  },
+  "akacja": {
+   "model": "b3_o_akacja",
+   "fill": 0.69
+  },
+  "skala": {
+   "model": "b3_o_skala",
+   "fill": 0.75
+  },
+  "smietnik": {
+   "model": "b3_o_smietnik",
+   "fill": 0.32
+  },
+  "budowa": {
+   "model": "b3_o_budowa",
+   "fill": 1.0
+  },
+  "tabliczka": {
+   "model": "b3_o_tabl2",
+   "fill": 0.91
+  }
+ }
+}
