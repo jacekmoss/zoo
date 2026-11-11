@@ -805,7 +805,7 @@
     say('Działka pod parking! Dotknij plusa i zbuduj.');
   }
   function buildPark(i) {
-    if (S.coins < PARK_BUILD) { sfx.no(); sayHint('Za mało monet. Goście przyniosą więcej.'); return; }
+    if (S.coins < PARK_BUILD) { sfx.no(); signShake['pb' + i] = 0.5; sayHint('Za mało monet. Goście przyniosą więcej.', 2); return; }
     S.coins -= PARK_BUILD; S.parks[i] = { st: 1, b: PARK_T }; sfx.build(); idle = 0; saveNow(); say('Budujemy parking!');
   }
   function parkSlots() {
@@ -941,9 +941,15 @@
   }
   // Śmietniki: stoją na ścieżce, w pobliżu nikt nie śmieci.
   const binNear = (x, y) => Object.keys(S.bins).some((k) => { if (S.bins[k] > 0) return false; const [a, b] = k.split(',').map(Number); return Math.abs(a - x) + Math.abs(b - y) <= BIN_R; });
-  function toggleBin(x, y) {
-    const k = tkey(x, y);
-    if (!S.paths.has(k)) { sfx.no(); sayHint('Śmietnik stawiamy na ścieżce.', 3); return; }
+  // fx, fy: dokładne miejsce dotknięcia; obok ścieżki (brzeg, bruk przy bramie, budynek zasłaniający pole) bierzemy najbliższe pole ścieżki
+  function toggleBin(x, y, fx, fy) {
+    let k = tkey(x, y);
+    if (!S.paths.has(k) && fx != null) {
+      let best = null, bd = 1.3;
+      S.paths.forEach((pk) => { const [a, b] = pk.split(',').map(Number), d = Math.hypot(a + 0.5 - fx, b + 0.5 - fy); if (d < bd) { bd = d; best = pk; } });
+      if (best) { k = best; [x, y] = best.split(',').map(Number); }
+    }
+    if (!S.paths.has(k)) { sfx.no(); sayHint('Śmietnik stawiamy na ścieżce.', 2); return; }
     if (S.bins[k] != null) { delete S.bins[k]; sfx.tap(); dirty = true; return; }
     if (S.coins < BIN_PRICE) { sfx.no(); sayHint('Za mało monet. Goście przyniosą więcej.'); return; }
     S.coins -= BIN_PRICE; S.bins[k] = BIN_T; const w = g2w(x + 0.5, y + 0.5); minusCoin(BIN_PRICE, w.x, w.y - 20); sfx.build(); dirty = true; idle = 0;
@@ -1823,7 +1829,10 @@
     dust.forEach((d) => { const k = d.t / 0.8; ctx.globalAlpha = 0.5 * (1 - k); ctx.fillStyle = '#d8ccae'; ctx.beginPath(); ctx.arc(d.wx, d.wy - k * 34, 7 + k * 16, 0, 7); ctx.fill(); ctx.globalAlpha = 1; });
     buy.forEach(drawSign);
     parkBuyable().forEach((i) => drawSignAt(parkSignPos(i), parkPrice(), 'p' + i));
-    Object.keys(S.parks).forEach((i) => { if (S.parks[i].st === 0) { const w = g2w(parkX(+i) + PLOT / 2, PY + 1.5); drawPlusAt(w.x, w.y); } });
+    Object.keys(S.parks).forEach((i) => { if (S.parks[i].st === 0) {     // plus budowy z ceną: bez ceny dziecko nie wie, że brakuje monet
+      const w = g2w(parkX(+i) + PLOT / 2, PY + 1.5), sh = signShake['pb' + i] ? Math.sin(time * 40) * 6 : 0;
+      drawPlusAt(w.x + sh, w.y); pricePill(w.x + sh, w.y + 58, PARK_BUILD, clamp(S.coins / PARK_BUILD, 0, 1));
+    } });
     if (S.panel) {
       const [px, py, q] = S.panel.split(',').map(Number), [qx, qy] = QUADS[q], bx = px * PLOT + qx, by = py * PLOT + qy;
       diamond(bx + 0.04, by + 0.04, bx + 1.96, by + 1.96); ctx.strokeStyle = C.gold; ctx.lineWidth = 7; ctx.stroke();
@@ -2928,7 +2937,7 @@
     if (inR(ui, rateBox())) { sfx.tap(); say(S.rate >= 66 ? 'Goście są zadowoleni.' : S.rate >= 36 ? 'Goście są tak sobie zadowoleni.' : 'Goście są niezadowoleni. Karm zwierzęta i sprzątaj.'); return; }
     if (inR(ui, starBox())) { sfx.tap(); say('Masz ' + S.starsSeen + ' ' + gwiazdki(S.starsSeen) + '. Nowe zwierzęta i kioski dają gwiazdki.'); return; }
     if (S.tool === 'dem') { const w0 = s2w(sx, sy); demolishAt(w2g(w0.x, w0.y)); return; }
-    if (S.tool === 'bin') { const w0 = s2w(sx, sy), g0 = w2g(w0.x, w0.y); toggleBin(Math.floor(g0.x), Math.floor(g0.y)); return; }
+    if (S.tool === 'bin') { const w0 = s2w(sx, sy), g0 = w2g(w0.x, w0.y); toggleBin(Math.floor(g0.x), Math.floor(g0.y), g0.x, g0.y); return; }
     if (escHit(sx, sy)) { catchEsc('kid'); return; }
     if (thiefHit(sx, sy)) { catchThief(); return; }
     if (upHit(sx, sy)) { upgrade(upSel.k); return; }
@@ -3022,7 +3031,7 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) saveNow(); });
 
   window.__zoo = {
-    S, RT, tick, MAPS, openSlot, enterMap, makeSick, freeVet, thief: () => S.thief, sendThief: () => { thiefTimer = 0; }, catchThief, PLOT, rateTarget, spawnGuest, parkSlots, buyPark, buildPark, orderClear, build, toggleBin, slotInfo, deleteSlot, slotCards, bubbleHit, freeTileAt, TYPES, g2w, w2s, tkey, placeCenter, plotPrice, buyablePlots, missingRoute, attraction, spawnEvery, ticket, unlocked, saveNow, recompute,
+    S, RT, tick, MAPS, openSlot, enterMap, makeSick, freeVet, thief: () => S.thief, sendThief: () => { thiefTimer = 0; }, catchThief, PLOT, rateTarget, spawnGuest, parkSlots, buyPark, buildPark, parkBuyable, parkSignPos, parkAt, s2w, w2g, orderClear, build, toggleBin, slotInfo, deleteSlot, slotCards, bubbleHit, freeTileAt, TYPES, g2w, w2s, tkey, placeCenter, plotPrice, buyablePlots, missingRoute, attraction, spawnEvery, ticket, unlocked, saveNow, recompute,
     hint: () => hint, idle: () => idle, cam, PERF, view, contentBox, glStats: () => G ? { draws: G.stats.draws, verts: G.stats.verts, texMB: Math.round(G.stats.texBytes / 1048576), tex: G.stats.texCount, dpr: DPR } : null,
     timers(v) {
       if (v) { if ('hunger' in v) hungerTimer = v.hunger; if ('wish' in v) wishTimer = v.wish; if ('show' in v) showTimer = v.show; if ('esc' in v) escTimer = v.esc; if ('rain' in v) rainTimer = v.rain; if ('bus' in v) busTimer = v.bus; }
