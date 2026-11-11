@@ -75,6 +75,8 @@
     wata: K('Wata cukrowa', 22, 5, 6),
     pizza: K('Pizza', 26, 6, 7),
     wet: V('Weterynarz', 30),
+    // toaleta: goście, którzy pobyli chwilę w zoo, chcą z niej skorzystać; bez niej spada zadowolenie
+    toaleta: { kind: 'wc', say: 'Toaleta', price: 10, star: 0, biome: 'kiosk' },
     // pracownicy: sami karmią, sprzątają i uzupełniają w pobliżu (swoja działka i sąsiednie), biorą małą pensję
     opiekun: W('Opiekun zwierząt', 25, 1),
     sprzatacz: W('Sprzątacz', 20, 2),
@@ -392,7 +394,7 @@
   let dirty = false, lastSave = 0, slotCache = null, saveFlash = 0;
   function mapData() {
     return { coins: S.coins, plots: [...S.plots], paths: [...S.paths], builds: S.builds, trash: S.trash, wish: S.wish, obst: S.obst, clear: S.clear,
-      bins: S.bins, parks: S.parks, g: PLOT, rate: Math.round(S.rate), angry: Math.round(S.angry) };
+      bins: S.bins, parks: S.parks, g: PLOT, rate: Math.round(S.rate), angry: Math.round(S.angry), wcNeed: S.wcNeed ? 1 : 0, wcWait: Math.round(S.wcWait || 0) };
   }
   function saveNow() {
     dirty = false; lastSave = performance.now();
@@ -477,10 +479,11 @@
     S.parks = {}; Object.keys(d.parks || {}).forEach((i) => { const v = d.parks[i]; if (+i >= 0 && +i < COLS && v) S.parks[i] = { st: clamp(+v.st || 0, 0, 2), b: +v.b || 0 }; });
     S.rate = d.rate == null ? 60 : clamp(+d.rate || 0, 0, 100);
     S.angry = clamp(+d.angry || 0, 0, 60);
+    S.wcNeed = d.wcNeed ? 1 : 0; S.wcWait = clamp(+d.wcWait || 0, 0, 100);
   }
   function blankMap(i) {
     S.coins = MAPS[i].start; S.plots = new Set(); S.paths = new Set(); S.builds = {}; S.trash = []; S.wish = null;
-    S.obst = genTerrain(MAPS[i]); S.clear = {}; S.bins = {}; S.parks = {}; S.rate = 60; S.angry = 0;
+    S.obst = genTerrain(MAPS[i]); S.clear = {}; S.bins = {}; S.parks = {}; S.rate = 60; S.angry = 0; S.wcNeed = 0; S.wcWait = 0;
   }
   // Mapy mają różne wymiary: wszystko, co od nich zależy, ustawiamy tutaj.
   function setMap(i) {
@@ -623,6 +626,7 @@
   function needOf(k) {
     const b = S.builds[k]; if (b.b || TYPES[b.type].kind === 'vet') return null;
     if (!isConnected(k)) return 'cut';
+    if (TYPES[b.type].kind === 'wc') return null;
     if (isAnimal(k)) return b.sick ? 'sick' : b.h ? 'h' : S.show && S.show.k === k && !S.show.on ? 'show' : null;
     if (isKiosk(k)) return b.st <= 0 ? 'st' : null;
     return null;
@@ -710,7 +714,7 @@
     if (!S.seen.plot) { S.seen.plot = 1; say('Masz działkę! Dotknij plusa i wybierz zwierzę.'); } else say(plotHasObstacles(k) ? 'Nowa działka! Dotknij drzew, piachu, wody i błota, żeby uprzątnąć teren.' : 'Nowa działka!');
     return true;
   }
-  const buildTime = (type) => { const t = TYPES[type]; return t.kind === 'vet' ? 22 : t.kind === 'animal' ? clamp(14 + t.price * 0.3, 14, 30) : 12 + t.price * 0.2; };
+  const buildTime = (type) => { const t = TYPES[type]; return t.kind === 'vet' ? 22 : t.kind === 'wc' ? 14 : t.kind === 'animal' ? clamp(14 + t.price * 0.3, 14, 30) : 12 + t.price * 0.2; };
   function build(key, type) {
     const t = TYPES[type];
     if (S.coins < t.price) { sfx.no(); sayHint('Za mało monet. Goście przyniosą więcej.'); return false; }
@@ -724,6 +728,7 @@
     const b = S.builds[key], type = b.type, t = TYPES[type]; delete b.b;
     const rt = RT[key] || makeRT(key); rt.pop = 0; recompute(); sfx.build(); idle = Math.min(idle, 1);
     if (t.kind === 'vet') { S.found[type] = 1; say('Weterynarz gotowy! Chore zwierzęta będą leczone.'); saveNow(); return; }
+    if (t.kind === 'wc') { S.found[type] = 1; saveNow(); say(isConnected(key) ? 'Toaleta gotowa! Goście są zadowoleni.' : 'Toaleta! Dołóż ścieżkę, żeby goście doszli.'); return; }
     if (t.kind === 'staff') {
       S.found[type] = 1; rangeSel = { k: key, t: 5 }; saveNow();
       const job = { opiekun: 'Opiekun sam nakarmi głodne zwierzęta w pobliżu.', sprzatacz: 'Sprzątacz sam posprząta śmieci w pobliżu.', dostawca: 'Dostawca sam uzupełni kioski w pobliżu.' }[type];
@@ -887,10 +892,25 @@
     r += Math.min(14, S.connected.filter(isFun).reduce((s, k) => s + TYPES[S.builds[k].type].joy, 0));   // atrakcje
     r += Math.min(6, an.reduce((s, b) => s + (b.lv || 0) * 1.5, 0));                                     // ulepszone wybiegi
     if (S.esc) r -= 8;                                                                                    // zwierzę uciekło
+    r -= wcPenalty();                                                                                     // goście czekają na toaletę
     r += S.cheer;                                                                                         // po pokazie i wycieczce
     return clamp(r, 0, 100);
   }
+  // Toaleta: dopóki goście z potrzebą nie mają dokąd pójść, kara rośnie z czasem (do 25 pkt); po zbudowaniu toalety szybko znika.
+  const wcOk = () => S.connected.some((k) => kindOf(k) === 'wc');
+  const wcActive = () => Object.values(S.builds).filter((b) => !b.b && TYPES[b.type].kind !== 'wc').length >= 2;
+  const wcWaiting = () => S.guests.filter((g) => g.wc && !g.dead).length;
+  const wcPenalty = () => Math.min(25, (S.wcWait || 0) * 0.25);
+  // S.wcNeed: goście już raz chcieli do toalety – od tej chwili brak toalety stale obniża zadowolenie
+  function tickWc(dt) {
+    if (wcWaiting()) S.wcNeed = 1;
+    if (!wcOk() && S.wcNeed) {
+      S.wcWait = Math.min(100, (S.wcWait || 0) + dt);
+      if (S.wcWait > 3 && wcWaiting() && !S.seen.wc) sayOnce('wc', 'Goście chcą do toalety! Postaw toaletę, bo będą niezadowoleni.');
+    } else S.wcWait = Math.max(0, (S.wcWait || 0) - dt * 4);
+  }
   function tickRate(dt) {
+    tickWc(dt);
     S.angry = Math.max(0, S.angry - dt * 0.5); S.cheer = Math.max(0, S.cheer - dt * 0.15);
     S.rate = clamp(S.rate + (rateTarget() - S.rate) * Math.min(1, dt * 0.06), 0, 100);
   }
@@ -1393,6 +1413,16 @@
   }
   function guestFromCar(c) { if (c.kind === 'bus') busArrive(c); else addGuest(c.slot.x, c.slot.y, c); }
   function nextTarget(g) {
+    // po pierwszej atrakcji część gości chce do toalety; jeśli jest połączona, idą tam najpierw (bez liczenia do wizyt)
+    if (!g.wc && !g.wcDone && g.seen.length >= 1 && wcActive() && Math.random() < 0.4) { g.wc = 1; g.wcT = 0; }
+    if (g.wc) {
+      const wcs = S.connected.filter((k) => kindOf(k) === 'wc');
+      if (wcs.length) {
+        const from = g.at || GATE_TILE, key = wcs[0];
+        const route = bfsPath(from, placeTiles(key).map(([x, y]) => tkey(x, y)).filter((t) => S.network.has(t)));
+        if (route) { g.q = route.map((t) => ({ x: t.x + 0.5 + g.ox, y: t.y + 0.5 + g.oy })); g.st = 'to'; g.target = key; g.at = route[route.length - 1]; return; }
+      }
+    }
     const open = S.connected.filter((k) => isOpen(k) && !g.seen.includes(k));
     if (!open.length || g.visits <= 0) return goHome(g);
     const key = pick(open);
@@ -1431,6 +1461,11 @@
     if (g.st === 'in') { addCoins(ticket(), GXC, BY - 0.2, 70, 'bilet'); g.at = { x: GATE_TILE.x, y: GATE_TILE.y }; nextTarget(g); }
     else if (g.st === 'to') {
       const b = S.builds[g.target];
+      if (b && TYPES[b.type].kind === 'wc') {        // skorzystał z toalety: ulga i drobna opłata
+        g.wc = 0; g.wcDone = 1; const c = placeCenter(g.target); addCoins(1, c.x, c.y, 140, 'toaleta');
+        if (RT[g.target]) RT[g.target].hop = 0.4;
+        g.last = g.target; g.st = 'look'; g.wait = rand(1.5, 2.5); return;
+      }
       if (b && TYPES[b.type].kind === 'kiosk' && isConnected(g.target) && b.st > 0 && Math.random() < BUY) {
         const c = placeCenter(g.target);
         addCoins(TYPES[b.type].pay, c.x, c.y, 140, 'kiosk'); b.st--; dirty = true;
@@ -1527,6 +1562,7 @@
     if (S.trash.length >= 3 && !Object.keys(S.bins).length && S.coins >= BIN_PRICE && S.tool !== 'bin') { const r = btnBin(); return { ui: true, x: r.x + r.w / 2, y: r.y + 10, wait: 3 }; }
     if (S.trash.length >= 3) { const [x, y] = S.trash[0].split(',').map(Number), w = g2w(x + 0.5, y + 0.5); return { x: w.x, y: w.y - 10, wait: 5 }; }
     const free = freePlaces();
+    if (wcWaiting() && !wcOk() && free.length && S.coins >= TYPES.toaleta.price && !builds.some((k) => kindOf(k) === 'wc')) { const c = placeCenter(free[0]), w = g2w(c.x, c.y); return { x: w.x, y: w.y, wait: 3 }; }
     if (builds.some((k) => needOf(k) === 'sick') && !freeVet() && free.length && S.coins >= TYPES.wet.price && !builds.some((k) => S.builds[k].type === 'wet' && S.builds[k].b)) { const c = placeCenter(free[0]), w = g2w(c.x, c.y); return { x: w.x, y: w.y, wait: 3 }; }
     { const ob = Object.keys(S.obst).find((k) => { if (S.clear[k]) return false; const [x, y] = k.split(',').map(Number); return S.plots.has(plotOf(x, y)); });
       if (ob && (!free.length || builds.some((k) => needOf(k) === 'cut'))) { const [x, y] = ob.split(',').map(Number), w = g2w(x + 0.5, y + 0.5); return { x: w.x, y: w.y - 10, wait: 3 }; } }
@@ -1851,6 +1887,7 @@
       else if (b.type === 'wet') drawVetPips(w.x, w.y - 148, patients(k));
     });
     S.cars.forEach((c) => { if (c.mad) { const w = g2w(c.x, c.y); drawMad(w.x, w.y - 74); } });
+    if (!wcOk()) S.guests.forEach((g) => { if (g.wc && !g.dead && g.fade > 0.5) { const w = g2w(g.x, g.y); drawWcNeed(w.x, w.y - 112, g.id); } });
     if (!S.connected.length && S.plots.size) { const w = g2w(GXC, BY + 2.3); drawNoPath(w.x + 110, w.y - 66); }
     if (S.tool === 'dem') drawDemMarks();
     drawRange(); drawUpBtn();
@@ -1940,6 +1977,7 @@
     const pop = easeOut(rt.pop), sc = 0.55 + 0.45 * pop;
     ctx.save(); ctx.translate(w.x, w.y); ctx.scale(sc, sc);
     if (t.kind === 'vet') { if (!OBJ3D().wet) blit(PATIO, 0, 0); spr('wet', 0, 0, 1); }
+    else if (t.kind === 'wc') { if (!OBJ3D().toaleta) blit(PATIO, 0, 0); const hop = rt.hop > 0 ? Math.abs(Math.sin(rt.hop * 12)) * 5 : 0; spr('toaleta', 0, -hop, 1); }
     else if (t.kind === 'staff') { if (!OBJ3D()[b.type]) blit(PATIO, 0, 0); const hop = rt.hop > 0 ? Math.abs(Math.sin(rt.hop * 12)) * 6 : 0; spr(b.type, 0, -hop, 1); }
     else if (t.kind === 'fun') { if (OBJ3D()[b.type]) spr(b.type, 0, 0, 1); else { if (b.type !== 'ogrod' && b.type !== 'plac') blit(PATIO, 0, 0); LOOK.drawFun(ctx, b.type, time); } }
     else if (t.kind === 'kiosk') {
@@ -2136,6 +2174,24 @@
     bubble(x, y, 34);
     spr(icon, x, y + (icon === 'miska' ? 12 : 14), icon === 'miska' ? 1.25 : 1.05);
   }
+  // Gość chce do toalety: chmurka z sedesem nad głową (dziecko nie czyta, więc obrazek zamiast „WC”).
+  function drawWcNeed(x, y, seed) {
+    y += Math.sin(time * 4 + seed) * 3;
+    const r = 25, urgent = wcPenalty() > 12;
+    if (urgent) { ctx.beginPath(); ctx.arc(x, y, r + 5 + Math.sin(time * 10) * 2, 0, 7); ctx.strokeStyle = 'rgba(198,74,66,.9)'; ctx.lineWidth = 4; ctx.stroke(); }
+    bubble(x, y, r); toiletIcon(x, y + 2, 1);
+  }
+  function toiletIcon(x, y, s) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    const ink = '#3e5a73', pale = '#f8fbfd';
+    rr(-4, -17, 13, 16, 3); ctx.fillStyle = ink; ctx.fill();                                   // zbiornik
+    rr(-2, -15, 9, 12, 2); ctx.fillStyle = pale; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-14, -2); ctx.lineTo(10, -2); ctx.quadraticCurveTo(10, 9, 0, 11); ctx.lineTo(3, 17); ctx.lineTo(-8, 17); ctx.lineTo(-6, 10); ctx.quadraticCurveTo(-14, 7, -14, -2); ctx.closePath();
+    ctx.fillStyle = ink; ctx.fill();                                                              // muszla
+    ctx.beginPath(); ctx.moveTo(-11, 0); ctx.lineTo(7, 0); ctx.quadraticCurveTo(7, 6, -1, 8); ctx.quadraticCurveTo(-11, 6, -11, 0); ctx.closePath(); ctx.fillStyle = pale; ctx.fill();
+    ctx.fillStyle = ink; ctx.fillRect(-16, -5, 28, 3.5);                                         // deska
+    ctx.restore();
+  }
   function crossIcon(x, y, s, col = '#c64a42') { ctx.fillStyle = col; ctx.fillRect(x - s * 0.3, y - s, s * 0.6, s * 2); ctx.fillRect(x - s, y - s * 0.3, s * 2, s * 0.6); }
   // Chore zwierzę: czerwony krzyż w pulsującym pierścieniu (czeka na wolne miejsce u weterynarza).
   function drawSick(x, y) {
@@ -2308,7 +2364,7 @@
   // Zakładki sklepu: zwierzęta, kioski, atrakcje, pracownicy (z weterynarzem). Obrazek zamiast napisu – dziecko nie czyta.
   const TABS = [{ k: 'animal', icon: 'lew' }, { k: 'kiosk', icon: 'kiosk_lody' }, { k: 'fun', icon: 'karuzela' }, { k: 'staff', icon: 'opiekun' }];
   let panelTab = 'animal', panelIn = 0, tabPop = 0;
-  const tabOf = (t) => { const k = TYPES[t].kind; return k === 'vet' ? 'staff' : k; };
+  const tabOf = (t) => { const k = TYPES[t].kind; return k === 'vet' ? 'staff' : k === 'wc' ? 'kiosk' : k; };
   const TAB_SAY = { animal: 'Zwierzęta.', kiosk: 'Kioski.', fun: 'Atrakcje.', staff: 'Pracownicy.' };
   function tabRects() {
     const cb = closeBtn(), h = (PANEL_H - 36 - 70 - 5 * 8) / 4;
@@ -2316,13 +2372,13 @@
   }
   function openPanel(key) {
     S.panel = key; panelScroll = 0; panelIn = 0;
-    panelTab = S.wish && unlocked().includes(S.wish) ? tabOf(S.wish) : 'animal';
+    panelTab = S.wcNeed && !Object.values(S.builds).some((b) => TYPES[b.type].kind === 'wc') ? 'kiosk' : S.wish && unlocked().includes(S.wish) ? tabOf(S.wish) : 'animal';
   }
   function setTab(k) { if (k === panelTab) return; panelTab = k; panelScroll = 0; tabPop = 0.25; sfx.tap(); say(TAB_SAY[k]); }
   function panelItems() {
     const un = unlocked();
     const inTab = (t) => tabOf(t) === panelTab;
-    const items = ['wet', ...STAFF.filter((t) => un.includes(t)), ...ANIMALS.filter((t) => un.includes(t)), ...KIOSKS.filter((t) => un.includes(t)), ...FUN.filter((t) => un.includes(t))].filter(inTab).map((t) => ({ type: t, locked: false }));
+    const items = ['wet', 'toaleta', ...STAFF.filter((t) => un.includes(t)), ...ANIMALS.filter((t) => un.includes(t)), ...KIOSKS.filter((t) => un.includes(t)), ...FUN.filter((t) => un.includes(t))].filter(inTab).map((t) => ({ type: t, locked: false }));
     nextStarTypes().filter(inTab).forEach((t) => items.push({ type: t, locked: true }));
     return items;
   }
@@ -2934,7 +2990,7 @@
     if (inR(ui, btnMaps())) { sfx.tap(); S.tool = null; S.scene = 'maps'; say('Mapy.'); return; }
     if (inR(ui, btnBin())) { sfx.tap(); demSel = null; S.tool = S.tool === 'bin' ? null : 'bin'; if (S.tool) say('Dotknij ścieżki, żeby postawić śmietnik.'); return; }
     if (inR(ui, btnDem())) { sfx.tap(); demSel = null; S.tool = S.tool === 'dem' ? null : 'dem'; if (S.tool) say('Dotknij budynku, który chcesz zburzyć.'); return; }
-    if (inR(ui, rateBox())) { sfx.tap(); say(S.rate >= 66 ? 'Goście są zadowoleni.' : S.rate >= 36 ? 'Goście są tak sobie zadowoleni.' : 'Goście są niezadowoleni. Karm zwierzęta i sprzątaj.'); return; }
+    if (inR(ui, rateBox())) { sfx.tap(); if (wcPenalty() > 5) { say('Goście są niezadowoleni, bo nie ma toalety.'); return; } say(S.rate >= 66 ? 'Goście są zadowoleni.' : S.rate >= 36 ? 'Goście są tak sobie zadowoleni.' : 'Goście są niezadowoleni. Karm zwierzęta i sprzątaj.'); return; }
     if (inR(ui, starBox())) { sfx.tap(); say('Masz ' + S.starsSeen + ' ' + gwiazdki(S.starsSeen) + '. Nowe zwierzęta i kioski dają gwiazdki.'); return; }
     if (S.tool === 'dem') { const w0 = s2w(sx, sy); demolishAt(w2g(w0.x, w0.y)); return; }
     if (S.tool === 'bin') { const w0 = s2w(sx, sy), g0 = w2g(w0.x, w0.y); toggleBin(Math.floor(g0.x), Math.floor(g0.y), g0.x, g0.y); return; }
@@ -2942,6 +2998,9 @@
     if (thiefHit(sx, sy)) { catchThief(); return; }
     if (upHit(sx, sy)) { upgrade(upSel.k); return; }
     if (wishHit(sx, sy)) { sfx.tap(); say('Gość chce zobaczyć: ' + TYPES[S.wish].say); return; }
+    if (!wcOk() && S.guests.some((g) => { if (!g.wc || g.dead) return false; const w = g2w(g.x, g.y), p = w2s(w.x, w.y - 112); return Math.hypot(sx - p.x, sy - p.y) <= Math.max(40 * cam.s, 34); })) {
+      sfx.tap(); say(Object.values(S.builds).some((b) => TYPES[b.type].kind === 'wc') ? 'Goście chcą do toalety. Dołóż do niej ścieżkę.' : 'Gość chce do toalety. Postaw toaletę: jest wśród kiosków.'); return;
+    }
     const bk = bubbleHit(sx, sy);
     if (bk) { tapBuilding(bk); return; }
     const sh = signHit(sx, sy);
@@ -2965,6 +3024,7 @@
     const rt = RT[k] || makeRT(k), b = S.builds[k], t = TYPES[b.type];
     if (b.b > 0) { b.b = Math.max(0.05, b.b - 0.35); rt.shake = 0.2; sfx.tap(); idle = 0; return; }   // dotykanie budowy trochę ją przyspiesza
     if (t.kind === 'vet') { rt.hop = 0.5; sfx.tap(); say(t.say); return; }
+    if (t.kind === 'wc') { if (needOf(k) === 'cut') { rt.shake = 0.5; sfx.no(); sayHint('Tu nie ma ścieżki. Goście nie dojdą.', 3); return; } rt.hop = 0.5; sfx.tap(); say(t.say); return; }
     if (t.kind === 'staff') { rt.hop = 0.5; sfx.tap(); rangeSel = { k, t: 4 }; if (needOf(k) === 'cut') { sayHint('Zrób ścieżkę do domku, żeby mógł chodzić do pracy.', 3); return; } say(t.say + '. Pracuje na świecących działkach.'); return; }
     if (t.kind === 'fun') { if (needOf(k) === 'cut') { rt.shake = 0.5; sfx.no(); sayHint('Tu nie ma ścieżki. Goście nie dojdą.', 3); return; } rt.hop = 0.5; sfx.tap(); say(t.say); return; }
     if (b.vet) { sfx.tap(); sayHint(t.say + ' jest u weterynarza.', 3); return; }
@@ -3031,7 +3091,7 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) saveNow(); });
 
   window.__zoo = {
-    S, RT, tick, MAPS, openSlot, enterMap, makeSick, freeVet, thief: () => S.thief, sendThief: () => { thiefTimer = 0; }, catchThief, PLOT, rateTarget, spawnGuest, parkSlots, buyPark, buildPark, parkBuyable, parkSignPos, parkAt, s2w, w2g, orderClear, build, toggleBin, slotInfo, deleteSlot, slotCards, bubbleHit, freeTileAt, TYPES, g2w, w2s, tkey, placeCenter, plotPrice, buyablePlots, missingRoute, attraction, spawnEvery, ticket, unlocked, saveNow, recompute,
+    S, RT, tick, MAPS, openSlot, enterMap, makeSick, freeVet, thief: () => S.thief, sendThief: () => { thiefTimer = 0; }, catchThief, PLOT, rateTarget, spawnGuest, parkSlots, buyPark, buildPark, parkBuyable, parkSignPos, parkAt, s2w, w2g, wcWaiting, wcPenalty, wcOk, freePlaces, orderClear, build, toggleBin, slotInfo, deleteSlot, slotCards, bubbleHit, freeTileAt, TYPES, g2w, w2s, tkey, placeCenter, plotPrice, buyablePlots, missingRoute, attraction, spawnEvery, ticket, unlocked, saveNow, recompute,
     hint: () => hint, idle: () => idle, cam, PERF, view, contentBox, glStats: () => G ? { draws: G.stats.draws, verts: G.stats.verts, texMB: Math.round(G.stats.texBytes / 1048576), tex: G.stats.texCount, dpr: DPR } : null,
     timers(v) {
       if (v) { if ('hunger' in v) hungerTimer = v.hunger; if ('wish' in v) wishTimer = v.wish; if ('show' in v) showTimer = v.show; if ('esc' in v) escTimer = v.esc; if ('rain' in v) rainTimer = v.rain; if ('bus' in v) busTimer = v.bus; }

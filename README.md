@@ -22,6 +22,7 @@ Zasady:
 - Choroby: po 90 s głodu albo rzadko losowo (od 3 wybiegów). Weterynarz ma 2 miejsca i leczy 40 s; karetka zabiera zwierzę sama. Bez wolnego miejsca chore zwierzę czeka w wybiegu, aż miejsce się zwolni (policja nie zabiera już zwierząt).
 - Parking: za drogą, działka 5, 9, 13… monet + budowa 12. Przy drodze są 4 miejsca, każdy parking daje 8. Gdy brak miejsc, kierowcy się denerwują i zadowolenie spada.
 - Śmietnik (przycisk w lewym dolnym rogu, 5 monet): stoi na ścieżce, w promieniu 2 pól goście nie śmiecą.
+- Toaleta (zakładka kiosków, 10 monet, model `b3_toaleta`): gdy w zoo stoją co najmniej 2 gotowe budynki, gość po pierwszej atrakcji z szansą 40% chce do toalety (chmurka z sedesem nad głową). Od pierwszej takiej potrzeby, dopóki nie ma połączonej ścieżką toalety, zadowolenie spada coraz mocniej (0,25 pkt/s, najwyżej −25; stan w zapisie: `wcNeed`, `wcWait`). Z toaletą goście idą tam najpierw i płacą 1 monetę, a kara szybko znika.
 - Parking (od 2026-11-09): każdy gotowy parking podnosi limit gości o 5 (`PARK_GUESTS`) i skraca odstęp między gośćmi o 15% (`PARK_RATE`).
 - Śmietnik: gdy leżą co najmniej 2 śmieci, a śmietnika nie ma, przycisk świeci; przy 3 śmieciach dłoń wskazuje przycisk.
 - Pracownicy (karty w panelu budowy): Opiekun (karmi, łapie uciekinierów), Sprzątacz (śmieci), Dostawca (kioski). Pracują na swojej działce

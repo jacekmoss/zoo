@@ -535,5 +535,15 @@ window.ZOO_3D = {
    "w": 115.0,
    "h": 140.67
   }
+ },
+ "toaleta": {
+  "obj": {
+   "kind": "obj",
+   "file": "sprites/toaleta.webp",
+   "x": -76.0,
+   "y": -99.67,
+   "w": 151.67,
+   "h": 131.67
+  }
  }
 };

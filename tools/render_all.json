@@ -317,6 +317,10 @@
   "tabliczka": {
    "model": "b3_o_tabl2",
    "fill": 0.91
+  },
+  "toaleta": {
+   "model": "b3_toaleta",
+   "fill": 0.86
   }
  }
 }
