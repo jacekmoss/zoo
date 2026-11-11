@@ -3,7 +3,7 @@
    Przy instalacji zapisujemy w pamięci urządzenia WSZYSTKIE pliki gry (grafika, dźwięk, czcionka).
    Potem gra bierze pliki z pamięci (start bez sieci i bez czekania), a nową wersję pobiera w tle:
    gdy się pobierze cała, zastępuje starą przy następnym uruchomieniu. */
-const CACHE = 'zoo-892296c916';
+const CACHE = 'zoo-bfcec95ca1';
 const FILES = [
  "./",
  "./index.html",

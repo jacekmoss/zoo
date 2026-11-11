@@ -44,5 +44,7 @@
       window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
     }
   </script>
+  <script>window.gryHomeVisible = () => !window.__zoo || window.__zoo.S.scene === 'title';</script>
+  <script src="/home.js" data-corner="tl" defer></script>
 </body>
 </html>

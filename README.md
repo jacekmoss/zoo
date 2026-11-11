@@ -1,6 +1,6 @@
 # Moje Zoo
 
-Tycoon budowy zoo dla czterolatka. Canvas i czysty JS, bez budowania. Grafika: `assets.js` (zaakceptowana kanwa + dopisane w tym samym stylu nowe zwierzęta, kioski i wybiegi).
+Tycoon budowy zoo dla czterolatka. Czysty JS bez budowania, świat przez WebGL (`gl2d.js`), grafika z modeli 3D (sekcja „Technika”).
 
 Uruchomienie: dwuklik `start.bat` (włącza serwer, jeśli nie działa, i otwiera grę) albo `python -m http.server 8765` i http://localhost:8765/.
 Otwarcie samego `index.html` też działa, ale bez nagrań lektora i z osobnymi zapisami.
@@ -39,17 +39,35 @@ Zasady:
 - Mapy: 4 (`MAPS` w `game.js`), kolejna odblokowuje się po osiągnięciu celu (liczba różnych zwierząt i kiosków + zadowolenie). Każda mapa ma własne zoo i monety.
 - Zapis: 4 sloty w `localStorage` (`zoo.slot.v3.N`), zapis automatyczny i przycisk dyskietki. Stary `zoo.save.v2/v1` trafia do slotu 1. Slot kasuje przytrzymanie krzyżyka przez 2,5 s.
 
-Przed publikacją: repo, `games.js` w launcherze oraz w `index.html` przed `</body>`:
-`window.gryHomeVisible = () => !window.__zoo || window.__zoo.S.scene === 'title';` i `<script src="/home.js" data-corner="tl" defer></script>`.
+## Technika (od 2026-11-11)
 
-Grafika 3D (od 2026-11-10): wszystkie zwierzęta, wybiegi (po jednym na biom, żyrafa ma własny), kioski, domki pracowników,
-lecznica i atrakcje to modele z Meshy wyrenderowane do `sprites/` (7,6 MB). Od 2026-11-10 także brama, drzewa, skały, śmietnik, plac budowy i tekstury terenu (`tools/tekstury.py`: trawa, bruk, asfalt, piach, błoto, woda).
-Tabliczki z ceną: deska 3D, cena i moneta rysowane kodem na desce (pochylenie 0,43). Rysowane kodem zostały: ludzie, auta, menu i okienka.
-Płynność: gdy klatki są wolniejsze niż ~40 kl./s przez 2 s, gra obniża rozdzielczość rysowania (`DPR_CAP` w `game.js`).
-1. Wybiegi i budynki: `python tools/meshy.py koncept <wzór.png> <nazwa> "<opis>"` (obrazek w stylu wybiegu żyrafy, ok. 9 kredytów),
-   potem `python tools/meshy.py obraz models/<nazwa>/koncept.png <model>` (ok. 30). Zwierzęta: `tekst "<opis>" <nazwa>` albo `tools/meshy_batch.py`.
-2. `python tools/build3d.py [klucze]` renderuje wg `tools/render_all.json` (obrót, wielkość `fill`, woda `pool`, przeszkody `block`)
-   i zapisuje arkusze + `sprites/index.js`. Potrzebny serwer gry i Playwright (`NODE_PATH`). `--podglad` = szybki podgląd obrotu zwierząt.
-   Ruch zwierząt jest proceduralny (Meshy rigguje tylko postacie dwunożne); opcje: swing, pace, biped, legs, wave, waddle, tail, legZ.
-3. Gra używa grafiki 3D, gdy jest wpis w `sprites/index.js`; `?stary` w adresie pokazuje dawną grafikę.
-`models/` (344 MB, modele źródłowe) nie trafia do repo ani do publikacji – tylko `sprites/`.
+Świat rysuje karta graficzna: `gl2d.js` to własna, mała warstwa WebGL 2, która rozumie te same polecenia co płótno 2D
+(obrazki, wypełnienia, wzory, przycinanie), więc kod rysowania świata w `game.js` prawie się nie zmienił, a klatka kosztuje
+ok. 1–2 ms zamiast 26–200 ms. Napisy, dymki i interfejs zostają na zwykłym płótnie 2D (`#game`) nad światem (`#world`).
+`?bezgl` w adresie wyłącza WebGL (stary, wolny sposób, tylko do porównań), `?lekko` wymusza tryb tabletu.
+
+Tryb tabletu włącza się sam (mało pamięci albo ekran do ok. 1400 px): tekstury w połowie rozdzielczości, ok. 100 MB zamiast 400.
+
+Grafika:
+- `sprites2/` – klatki z Blendera: 19 zwierząt (chód, postój, jedzenie w 2 kierunkach + odbicia = 4 kierunki, z rzucanym cieniem),
+  10 postaci (goście, opiekun, sprzątacz, dostawca, weterynarz, robotnik), 5 pojazdów (auto, SUV, autobus, karetka, radiowóz),
+  3 drzewa bez podstawek, portrety do kart (`p_*.webp`). Indeks: `sprites2/index.js` (`window.ZOO_S2`).
+- `sprites/` – wybiegi, kioski, budynki, brama, tekstury terenu (render three.js z 2026-11-10, bez zmian).
+
+Jak powstają klatki (Blender 5.3 w katalogu `tools` użytkownika; zmienna środowiskowa `BLENDER` zmienia ścieżkę):
+1. Zwierzęta: `python tools/build_animals.py [nazwy] [--podglad]` → `tools/blender/animal.py` wg `tools/blender/animals.json`.
+   Szkielet liczony w numpy (nogi wykrywane jako osobne kawałki siatki, kolana przez odwrotną kinematykę, szyja, ogon),
+   bez armatury Blendera. Opcje na zwierzę: `h`, `kind` (quad/biped/slider/hopper), `gait` (walk/pace/trot), `stride`, `yaw`, `eatDeg`, `tail`.
+2. Postacie: `python tools/meshy.py tekst ...`, potem `python tools/meshy_rig.py <nazwa>` (szkielet + chód z Meshy, 5 kredytów),
+   potem `python tools/build_people.py [nazwy]` (`person.py` dla `os_*`, `prop.py` dla `auto_*`).
+   Drzewa: `prop.py` z opcjami `h` i `cutBase` (usuwa podstawkę), wynik w `models/t_*`.
+3. `python tools/pack2.py [nazwy]` skleja klatki w arkusze `sprites2/`. Podglądy: `renders/podglad2/`.
+4. Po każdej zmianie plików gry: `python tools/make_sw.py` (lista plików do działania bez internetu).
+
+Testy: `node tools/probe.js [katalog] [adres]` (płynność i zrzuty na pełnym zoo), `node tools/shot.js [katalog]` (zrzuty ekranów);
+oba potrzebują serwera gry i Playwrighta (`NODE_PATH` na `node_modules` z Playwrightem, np. z projektu onko-karta).
+
+Bez internetu: `sw.js` zapisuje przy pierwszym uruchomieniu wszystkie pliki (ok. 12 MB, także czcionkę z `fonts/`).
+Na tablecie: otworzyć raz adres gry w Chrome z internetem, „Dodaj do ekranu głównego”, potem działa offline.
+
+Sklep ma zakładki (zwierzęta, kioski, atrakcje, pracownicy). `models/` (ok. 500 MB) nie trafia do repo.
