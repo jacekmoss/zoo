@@ -28,5 +28,26 @@ window.ZOO_UI = {
   "bh": 414,
   "tx": 171.5,
   "ty": 5
+ },
+ "hedge": {
+  "file": "sprites2/ui_hedge.webp",
+  "w": 150.0,
+  "h": 110.0,
+  "cx": 75.0,
+  "cy": 55.0
+ },
+ "hedge2": {
+  "file": "sprites2/ui_hedge2.webp",
+  "w": 150.0,
+  "h": 110.0,
+  "cx": 75.0,
+  "cy": 55.0
+ },
+ "bush": {
+  "file": "sprites2/ui_bush.webp",
+  "w": 150.0,
+  "h": 110.0,
+  "cx": 75.0,
+  "cy": 55.0
  }
 };

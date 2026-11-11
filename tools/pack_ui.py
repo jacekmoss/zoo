@@ -2,7 +2,7 @@
    Kolejność: blender -b -P tools/blender/ui.py -- '{"what":"logo|play|hand","out":"renders/ui/<what>.png","w":1400|640|440,"samples":160}', potem python tools/pack_ui.py"""
 import json
 from pathlib import Path
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter, ImageEnhance
 ROOT = Path(__file__).resolve().parent.parent
 out = {}
 for name, shadow in (('logo', (0, 10, 12, 0.45)), ('play', (0, 12, 14, 0.5)), ('hand', (4, 8, 8, 0.45))):
@@ -24,5 +24,11 @@ for name, shadow in (('logo', (0, 10, 12, 0.45)), ('play', (0, 12, 14, 0.5)), ('
         al = big.getchannel('A'); px = al.load(); y0 = bb[1] + 6
         xs = [x for x in range(big.width) if px[x, y0] > 128]; e['tx'] = (xs[0] + xs[-1]) / 2 - cb[0]; e['ty'] = bb[1] - cb[1]
     res.save(ROOT / e['file'], 'WEBP', quality=92, method=6); out[name] = e
+for name in ('hedge', 'hedge2', 'bush'):      # pas zieleni (tools/blender/hedge.py): środek obrazka = środek pola, 3 piksele na jednostkę gry
+    im = Image.open(ROOT / 'renders' / 'ui' / f'{name}.png').convert('RGBA')
+    cb = im.getchannel('A').point(lambda v: 255 if v > 2 else 0).getbbox(); res = im.crop(cb)
+    al = res.getchannel('A'); res = ImageEnhance.Brightness(res.convert('RGB')).enhance(0.8).convert('RGBA'); res.putalpha(al)   # ciemniej, jak zieleń wybiegów
+    e = {'file': f'sprites2/ui_{name}.webp', 'w': res.width / 3, 'h': res.height / 3, 'cx': (im.width / 2 - cb[0]) / 3, 'cy': (im.height / 2 - cb[1]) / 3}
+    res.save(ROOT / e['file'], 'WEBP', quality=90, method=6); out[name] = e
 (ROOT / 'sprites2' / 'ui.js').write_text('// Plik generowany przez tools/pack_ui.py, nie edytować ręcznie.\nwindow.ZOO_UI = ' + json.dumps(out, indent=1) + ';\n', encoding='utf-8')
 print(json.dumps(out))

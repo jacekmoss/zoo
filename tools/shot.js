@@ -13,8 +13,8 @@ require('fs').mkdirSync(OUT, { recursive: true });
   await pg.evaluate(() => {
     const Z = window.__zoo, S = Z.S; Z.openSlot(0); S.open = 4; Z.enterMap(0); S.scene = 'play'; S.coins = 500;
     const types = Object.keys(Z.TYPES); let n = 0;
-    ['1,2', '2,2', '1,1'].forEach((pk) => { S.plots.add(pk); const [px, py] = pk.split(',').map(Number); for (let i = 0; i < 5; i++) { S.paths.add((px * 5 + 2) + ',' + (py * 5 + i)); S.paths.add((px * 5 + i) + ',' + (py * 5 + 2)); } });
-    Object.keys(S.obst).forEach(k => { const [x, y] = k.split(',').map(Number); if (S.plots.has(Math.floor(x / 5) + ',' + Math.floor(y / 5))) delete S.obst[k]; });
+    ['1,2', '2,2', '1,1'].forEach((pk) => { S.plots.add(pk); const [px, py] = pk.split(',').map(Number); for (let i = 0; i < 6; i++) { S.paths.add((px * 6 + 2) + ',' + (py * 6 + i)); S.paths.add((px * 6 + i) + ',' + (py * 6 + 2)); } });
+    Object.keys(S.obst).forEach(k => { const [x, y] = k.split(',').map(Number); if (S.plots.has(Math.floor(x / 6) + ',' + Math.floor(y / 6))) delete S.obst[k]; });
     ['zyrafa', 'lody', 'slon', 'krolik', 'lew', 'karuzela', 'opiekun', 'zebra', 'pingwin', 'wet'].forEach((t, i) => { const pk = [...S.plots][Math.floor(i / 4)]; Z.build(pk + ',' + (i % 4), t); S.builds[pk + ',' + (i % 4)].b = 0.01; S.coins = 500; });
     S.starsSeen = 5;
   });

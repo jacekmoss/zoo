@@ -7,16 +7,18 @@
    Zadania dziecka: karmić głodne zwierzęta, uzupełniać puste kioski, sprzątać śmieci, spełniać życzenia gości.
    Gwiazdki za różne zwierzęta i kioski odblokowują nowe; album pokazuje odkryte. Nie da się przegrać ani utknąć. */
 (() => {
-  const TW = 120, TH = 60, PLOT = 5;
+  // Działka 6×6 pól: miejsca 2×2 w polach 0–1 i 3–4, krzyż ścieżek w polu 2, a pole 5 to pas zieleni (żywopłot)
+  // oddzielający wybiegi sąsiednich działek. Ścieżka krzyża przechodzi przez pas (pola 2,5 i 5,2).
+  const TW = 120, TH = 60, PLOT = 6, GX = PLOT + 2, GXC = GX + 0.5;   // GX: kolumna bramy i wejścia
   let COLS = 4, ROWS = 3, BY = ROWS * PLOT, START = '1,' + (ROWS - 1);   // zależą od mapy (setMap)
-  const GATE_TILE = { x: 7, y: BY - 1 };     // pierwsze pole ścieżki za bramą
+  const GATE_TILE = { x: GX, y: BY - 1 };     // pierwsze pole ścieżki za bramą
   const KEY = 'zoo.save.v2', KEY_OLD = 'zoo.save.v1', KEY_SOUND = 'zoo.sound', KEY_SLOT = 'zoo.slot.v3.', SLOTS = 4;
   const PLOT_PRICES = [10, 25, 40, 60, 80, 100, 120, 140, 160, 180, 200, 220];
   const START_COINS = 20;
   const MAX_GUESTS = 14, MAX_TRASH = 8, STOCK = 6, BUY = 0.35;   // BUY: szansa, że gość coś kupi w kiosku
   const STAR_AT = [2, 4, 6, 8, 10, 12, 14, 16, 18];   // ile różnych zwierząt i kiosków daje kolejną gwiazdkę
-  // Choroby: po tylu sekundach głodu zwierzę choruje; po tylu sekundach bez leczenia zabiera je policja; tyle trwa leczenie.
-  const SICK_HUNGER = 90, POLICE_AFTER = 75, CURE_T = 40, VET_CAP = 2;
+  // Choroby: po tylu sekundach głodu zwierzę choruje; chore czeka w wybiegu, aż zwolni się miejsce u weterynarza; tyle trwa leczenie.
+  const SICK_HUNGER = 90, CURE_T = 40, VET_CAP = 2;
   const VEH_V = 5.5, DEM_BACK = 0.5, DEM_BACK_SITE = 0.8;   // zwrot przy burzeniu: gotowy budynek / jeszcze w budowie
   const BIN_PRICE = 5, BIN_T = 5, BIN_R = 2, PARK_BUILD = 12, PARK_T = 16, PARK_CAP = 8;
   // Nowości: parking (więcej gości), pracownicy, młode, pokazy, ucieczki, ulepszanie wybiegów, doba, deszcz, wycieczki.
@@ -219,6 +221,7 @@
   // Szyld, przycisk startu i dłoń podpowiedzi: rendery 3D z Blendera (tools/blender/ui.py → tools/pack_ui.py → sprites2/ui_*.webp)
   const UI3 = window.ZOO_UI || {}, UIIM = {};
   Object.keys(UI3).forEach((k) => { const im = new Image(); im.onload = () => { UIIM[k] = im; }; im.src = UI3[k].file; });
+  function uiSpr(name, x, y) { const e = UI3[name], im = UIIM[name]; if (e && im) ctx.drawImage(im, x - e.cx, y - e.cy, e.w, e.h); }
   function s2img(name) {
     let e = S2IMG[name];
     if (!e) { e = S2IMG[name] = { im: null }; const im = new Image(); im.onload = () => { e.im = im; }; im.onerror = () => console.error('Nie wczytano', name); im.src = S2[name].file; }
@@ -383,13 +386,13 @@
     wish: null, starsSeen: 0, overlay: null, earn: {},   // earn: licznik zarobku z tej sesji (bilety, kioski, życzenia)
     panel: null, network: new Set(), connected: [], guests: [],
     // chwilowe (bez zapisu): pora dnia, deszcz, pokaz, uciekinier, radość po pokazie/wycieczce
-    clock: 0, rain: 0, show: null, esc: null, cheer: 0,
+    clock: 0, rain: 0, show: null, esc: null, thief: null, cheer: 0,
   };
   const RT = {};                         // dane chwilowe budynków (ruch zwierząt, dymki); nie są zapisywane
   let dirty = false, lastSave = 0, slotCache = null, saveFlash = 0;
   function mapData() {
     return { coins: S.coins, plots: [...S.plots], paths: [...S.paths], builds: S.builds, trash: S.trash, wish: S.wish, obst: S.obst, clear: S.clear,
-      bins: S.bins, parks: S.parks, rate: Math.round(S.rate), angry: Math.round(S.angry) };
+      bins: S.bins, parks: S.parks, g: PLOT, rate: Math.round(S.rate), angry: Math.round(S.angry) };
   }
   function saveNow() {
     dirty = false; lastSave = performance.now();
@@ -407,7 +410,7 @@
       o.h = b.h ? 1 : 0; if (b.hs) o.hs = +b.hs || 0;
       if (b.sick) { o.sick = 1; o.wt = +b.wt || 0; }
       if (b.vet && b.vet.at) o.vet = { at: String(b.vet.at), t: +b.vet.t || 1 };
-      if (b.pol != null) o.pol = +b.pol || 0.1;
+      if (b.pol != null) { o.sick = 1; o.wt = 0; }          // stary zapis: policja już nie zabiera zwierząt, chore czeka na weterynarza
       if (b.lv) o.lv = clamp(Math.floor(+b.lv) || 0, 0, 2);
       if (b.kids) o.kids = clamp(Math.floor(+b.kids) || 0, 0, 3);
       if (b.hp) o.hp = +b.hp || 0;
@@ -435,7 +438,22 @@
     [[3, 0], [4, 0], [3, 1]].forEach(([a, b]) => { out[tkey(PLOT + a, sy + b)] = 'drzewo'; });
     return out;
   }
+  // Stary zapis (działki 5×5): pola przenosimy na siatkę 6×6. Budynki są zapisane numerem działki i miejsca, więc zostają.
+  function regrid(d) {
+    const G0 = 5, mv = (k) => { const [x, y] = String(k).split(',').map(Number); return tkey(Math.floor(x / G0) * PLOT + x % G0, Math.floor(y / G0) * PLOT + y % G0); };
+    const obj = (o) => { const r = {}; Object.keys(o || {}).forEach((k) => { r[mv(k)] = o[k]; }); return r; };
+    const o = Object.assign({}, d, { g: PLOT, paths: (d.paths || []).map(mv), trash: (d.trash || []).map(mv), clear: obj(d.clear), bins: obj(d.bins) });
+    // ścieżka, która dochodziła do krawędzi działki, przechodzi teraz przez pas zieleni (inaczej stare zoo byłoby odcięte od bramy)
+    o.paths.slice().forEach((k) => { const [x, y] = k.split(',').map(Number); if (x % PLOT === 2 && y % PLOT === PLOT - 2) o.paths.push(tkey(x, y + 1)); if (y % PLOT === 2 && x % PLOT === PLOT - 2) o.paths.push(tkey(x + 1, y)); });
+    if (d.obst) {       // kupione działki: stan z zapisu; reszta mapy: teren wylosowany od nowa na większej siatce
+      const own = new Set(d.plots || []), fresh = genTerrain(MAPS[S.map]), old = obj(d.obst); o.obst = {};
+      Object.keys(fresh).forEach((k) => { const [x, y] = k.split(',').map(Number); if (!own.has(plotOf(x, y))) o.obst[k] = fresh[k]; });
+      Object.keys(old).forEach((k) => { const [x, y] = k.split(',').map(Number); if (own.has(plotOf(x, y))) o.obst[k] = old[k]; });
+    }
+    return o;
+  }
   function applySave(d) {
+    if (d.g !== PLOT) d = regrid(d);
     S.coins = Math.max(0, Math.floor(+d.coins) || 0);
     S.plots = new Set((d.plots || []).filter(validPlotKey));
     S.paths = new Set((d.paths || []).filter((k) => { const [x, y] = k.split(',').map(Number); return isPathTile(x, y); }));
@@ -453,6 +471,7 @@
       Object.keys(S.obst).forEach((k) => { const [x, y] = k.split(',').map(Number); if (S.plots.has(plotOf(x, y))) delete S.obst[k]; });
     }
     S.paths.forEach((k) => delete S.obst[k]);
+    tidyStrips();
     S.clear = {}; Object.keys(d.clear || {}).forEach((k) => { const j = d.clear[k]; if (S.obst[k] && j && j.t > 0 && j.T > 0) S.clear[k] = { t: +j.t, T: +j.T, m: j.m ? 1 : 0 }; });
     S.bins = {}; Object.keys(d.bins || {}).forEach((k) => { if (S.paths.has(k)) S.bins[k] = Math.max(0, +d.bins[k] || 0); });
     S.parks = {}; Object.keys(d.parks || {}).forEach((i) => { const v = d.parks[i]; if (+i >= 0 && +i < COLS && v) S.parks[i] = { st: clamp(+v.st || 0, 0, 2), b: +v.b || 0 }; });
@@ -472,9 +491,9 @@
   function enterMap(i) {
     setMap(i);
     S.overlay = null; S.panel = null; S.tool = null; demSel = null; S.guests = []; S.cars = []; S.veh = [];
-    S.clock = DAY_LEN * 0.1; S.rain = 0; S.show = null; S.esc = null; S.cheer = 0; upSel = null; rangeSel = null;
+    S.clock = DAY_LEN * 0.1; S.rain = 0; S.show = null; S.esc = null; S.thief = null; S.cheer = 0; upSel = null; rangeSel = null;
     Object.keys(CREW).forEach((k) => delete CREW[k]);
-    showTimer = rand(70, 110); escTimer = rand(160, 240); rainTimer = rand(150, 260); busTimer = rand(120, 200); wageTimer = WAGE_EVERY;
+    showTimer = rand(70, 110); escTimer = rand(160, 240); thiefTimer = rand(200, 320); rainTimer = rand(150, 260); busTimer = rand(120, 200); wageTimer = WAGE_EVERY;
     Object.keys(RT).forEach((k) => delete RT[k]);
     const d = S.allMaps[i];
     if (d) applySave(d); else blankMap(i);
@@ -496,7 +515,7 @@
     const shift = (k, dy) => { const p = String(k).split(','); p[1] = String(+p[1] + dy); return p.join(','); };
     const builds = {};
     Object.keys(d.builds || {}).forEach((k) => { builds[shift(k, 1)] = { type: d.builds[k] && d.builds[k].type }; });
-    return { coins: d.coins, plots: (d.plots || []).map((k) => shift(k, 1)), paths: (d.paths || []).map((k) => shift(k, PLOT)), builds, seen: Object.assign({}, d.seen || {}, { all: 0 }), starsSeen: 0 };
+    return { coins: d.coins, plots: (d.plots || []).map((k) => shift(k, 1)), paths: (d.paths || []).map((k) => shift(k, 5)), builds, seen: Object.assign({}, d.seen || {}, { all: 0 }), starsSeen: 0 };
   }
   function slotInfo() {
     if (slotCache) return slotCache;
@@ -552,9 +571,13 @@
   }
   const quadOf = (gx, gy) => {
     const lx = gx - Math.floor(gx / PLOT) * PLOT, ly = gy - Math.floor(gy / PLOT) * PLOT;
-    if (lx === 2 || ly === 2) return -1;
+    if (lx === 2 || ly === 2 || lx > 4 || ly > 4) return -1;
     return (lx > 2 ? 1 : 0) + (ly > 2 ? 2 : 0);
   };
+  // Pas zieleni: ostatni rząd i kolumna działki, poza polami krzyża ścieżek.
+  const isStrip = (gx, gy) => { const lx = gx - Math.floor(gx / PLOT) * PLOT, ly = gy - Math.floor(gy / PLOT) * PLOT; return (lx === PLOT - 1 || ly === PLOT - 1) && lx !== 2 && ly !== 2; };
+  // Pas zieleni kupionej działki jest od razu uprzątnięty (rośnie tam tylko żywopłot).
+  function tidyStrips() { Object.keys(S.obst).forEach((tk) => { const [x, y] = tk.split(',').map(Number); if (isStrip(x, y) && S.plots.has(plotOf(x, y))) { delete S.obst[tk]; delete S.clear[tk]; terrainDirty = true; } }); }
   const placeKey = (plot, q) => plot + ',' + q;
   function placeCenter(key) {
     const [px, py, q] = key.split(',').map(Number), [qx, qy] = QUADS[q];
@@ -591,7 +614,7 @@
   const isConnected = (k) => S.connected.includes(k);
   const isAnimal = (k) => TYPES[S.builds[k].type].kind === 'animal';
   const isKiosk = (k) => TYPES[S.builds[k].type].kind === 'kiosk';
-  const away = (b) => !!b.vet || b.pol != null;                // zwierzę poza wybiegiem
+  const away = (b) => !!b.vet;                // zwierzę poza wybiegiem
   const animalOk = (b) => !b.h && !b.sick && !away(b);
   const kindOf = (k) => TYPES[S.builds[k].type].kind;
   const isFun = (k) => kindOf(k) === 'fun';
@@ -683,7 +706,7 @@
   function buyPlot(k) {
     const p = plotPrice();
     if (S.coins < p) { sfx.no(); signShake[k] = 0.5; sayHint('Za mało monet. Goście przyniosą więcej.'); return false; }
-    S.coins -= p; S.plots.add(k); sfx.build(); recompute(); saveNow(); idle = 0;
+    S.coins -= p; S.plots.add(k); tidyStrips(); sfx.build(); recompute(); saveNow(); idle = 0;
     if (!S.seen.plot) { S.seen.plot = 1; say('Masz działkę! Dotknij plusa i wybierz zwierzę.'); } else say(plotHasObstacles(k) ? 'Nowa działka! Dotknij drzew, piachu, wody i błota, żeby uprzątnąć teren.' : 'Nowa działka!');
     return true;
   }
@@ -738,14 +761,14 @@
     return true;
   }
   // ---------- teren: karczowanie, osuszanie, usuwanie piachu ----------
-  const plotHasObstacles = (k) => { const b = plotBase(k); for (let x = b.x; x < b.x + PLOT; x++) for (let y = b.y; y < b.y + PLOT; y++) if (S.obst[tkey(x, y)]) return true; return false; };
+  const plotHasObstacles = (k) => { const b = plotBase(k); for (let x = b.x; x < b.x + PLOT; x++) for (let y = b.y; y < b.y + PLOT; y++) if (S.obst[tkey(x, y)] && !isStrip(x, y)) return true; return false; };
   function quadTiles(key) { const [px, py, q] = key.split(',').map(Number), [qx, qy] = QUADS[q], bx = px * PLOT + qx, by = py * PLOT + qy; return [[bx, by], [bx + 1, by], [bx, by + 1], [bx + 1, by + 1]]; }
   const quadBlocked = (key) => quadTiles(key).some(([x, y]) => S.obst[tkey(x, y)]);
   // Dotknięcie przeszkody: robotnik zaczyna od razu i pracuje szybciej. Bez monet też działa.
   function orderClear(tk) {
     const kind = S.obst[tk]; if (!kind) return false;
     const old = S.clear[tk]; if (old && old.m) return false;
-    const [x, y] = tk.split(',').map(Number); if (!S.plots.has(plotOf(x, y))) return false;
+    const [x, y] = tk.split(',').map(Number); if (!S.plots.has(plotOf(x, y)) || isStrip(x, y)) return false;
     const cost = CLEAR_COST[kind];
     if (S.coins >= cost) { S.coins -= cost; const w = g2w(x + 0.5, y + 0.5); minusCoin(cost, w.x, w.y - 20); }
     const T = CLEAR_T[kind] * MANUAL_K; S.clear[tk] = { t: old ? T * old.t / old.T : T, T, m: 1 };
@@ -774,7 +797,7 @@
     return out;
   }
   const parkAt = (gx, gy) => (gy >= PY && gy <= PY + 3 && gx >= 0 && gx < COLS * PLOT) ? Math.floor(gx / PLOT) : -1;
-  function parkSignPos(i) { const w = g2w(parkX(i) + 2.5, PY + 1.5); return { x: w.x, y: w.y + 30 }; }
+  function parkSignPos(i) { const w = g2w(parkX(i) + PLOT / 2, PY + 1.5); return { x: w.x, y: w.y + 30 }; }
   function buyPark(i) {
     const p = parkPrice();
     if (S.coins < p) { sfx.no(); signShake['p' + i] = 0.5; sayHint('Za mało monet. Goście przyniosą więcej.'); return; }
@@ -786,12 +809,12 @@
     S.coins -= PARK_BUILD; S.parks[i] = { st: 1, b: PARK_T }; sfx.build(); idle = 0; saveNow(); say('Budujemy parking!');
   }
   function parkSlots() {
-    const out = [[1.6, 0], [3.4, 0], [10.2, 0], [13.6, 0]].map(([x]) => ({ x, y: BY + 1.5, k: 'r' + x }));   // przy drodze jest kilka miejsc od początku
+    const out = [[GXC - 5.9, 0], [GXC - 4.1, 0], [GXC + 2.7, 0], [GXC + 6.1, 0]].map(([x]) => ({ x, y: BY + 1.5, k: 'r' + x }));   // przy drodze jest kilka miejsc od początku
     Object.keys(S.parks).forEach((i) => {
       if (S.parks[i].st !== 2) return;
-      for (let j = 0; j < PARK_CAP; j++) out.push({ x: parkX(+i) + 0.75 + (j % 4) * 1.17, y: PY + (j < 4 ? 0.75 : 2.3), k: 'p' + i + j });
+      for (let j = 0; j < PARK_CAP; j++) out.push({ x: parkX(+i) + 0.75 + (j % 4) * (PLOT - 1.5) / 3, y: PY + (j < 4 ? 0.75 : 2.3), k: 'p' + i + j });
     });
-    return out.sort((a, b) => Math.abs(a.x - 7.5) - Math.abs(b.x - 7.5));
+    return out.sort((a, b) => Math.abs(a.x - GXC) - Math.abs(b.x - GXC));
   }
   function freeSlot() { const used = new Set(S.cars.filter((c) => c.slot).map((c) => c.slot.k)); return parkSlots().find((s) => !used.has(s.k)) || null; }
   const CAR_COLS = ['#a7524a', '#4f7a96', '#d2a64c', '#6d8a5a', '#8b6a9b', '#c7804e', '#d8d3c6'];
@@ -811,7 +834,7 @@
     S.cars = S.cars.filter((c) => !c.dead);
   }
   function carLeave(c) { c.st = 'out'; const left = Math.random() < 0.5; c.q = [{ x: c.slot.x, y: ROAD }, { x: carFar(left), y: ROAD }]; c.slot = null; }
-  // ---------- zdrowie: choroby, weterynarz, policja ----------
+  // ---------- zdrowie: choroby, weterynarz ----------
   let sickTimer = 200;
   const vets = () => Object.keys(S.builds).filter((k) => S.builds[k].type === 'wet' && !S.builds[k].b);
   const patients = (vk) => Object.values(S.builds).filter((b) => b.vet && b.vet.at === vk).length;
@@ -820,7 +843,7 @@
     const b = S.builds[k]; b.sick = 1; b.h = 0; b.hs = 0; b.wt = 0; dirty = true; sfx.hungry();
     const name = TYPES[b.type].say, ill = fem(b.type) ? ' jest chora.' : ' jest chory.';
     if (freeVet()) { if (why === 'glod') say(name + ill + ' Za długo było głodne.'); return; }
-    if (!sayOnce('sick', name + ill + ' Zbuduj weterynarza, bo inaczej zabierze je policja.')) sayHint(name + ill + ' Potrzebny weterynarz.', 4);
+    if (!sayOnce('sick', name + ill + ' Zbuduj weterynarza, żeby je wyleczyć.')) sayHint(name + ill + ' Potrzebny weterynarz.', 4);
   }
   function addVeh(kind, pts) { S.veh.push({ kind, pts: pts.slice(1), x: pts[0].x, y: pts[0].y, dx: 1, dy: 0 }); }
   function sendToVet(k, vk) {
@@ -832,25 +855,14 @@
     const b = S.builds[k]; delete b.vet; b.h = 0; b.hs = 0; const rt = RT[k] || makeRT(k); rt.hop = 0.7; sfx.joy(); dirty = true;
     sayHint(TYPES[b.type].say + (fem(b.type) ? ' jest zdrowa!' : ' jest zdrowy!'), 3);
   }
-  function callPolice(k) {
-    const b = S.builds[k], c = placeCenter(k), from = { x: 7.5, y: ROAD }, d = Math.hypot(c.x - from.x, c.y - from.y);
-    b.pol = d / VEH_V; b.sick = 0; dirty = true; addVeh('pol', [from, c, from]); tone(660, 0.3, 0.06); tone(520, 0.3, 0.06, 0.32);
-    say('Jedzie policja! Zwierzę długo chorowało i nikt go nie leczył.');
-  }
-  function policeTake(k) {
-    if (S.esc && S.esc.k === k) endEsc();
-    delete S.builds[k]; delete RT[k]; S.rate = Math.max(0, S.rate - 20); recompute(); sfx.no(); saveNow(); hintTimer = 0;
-    say('Policja zabrała zwierzę. Goście są smutni.');
-  }
   function tickHealth(dt) {
     Object.keys(S.builds).forEach((k) => {
       const b = S.builds[k]; if (TYPES[b.type].kind !== 'animal' || b.b) return;
-      if (b.pol != null) { b.pol -= dt; if (b.pol <= 0) policeTake(k); return; }
       if (b.vet) { b.vet.t -= dt; if (b.vet.t <= 0) discharge(k); return; }
       if (b.sick) {
         b.wt = (b.wt || 0) + dt;
         const v = freeVet();
-        if (v) sendToVet(k, v); else if (b.wt >= POLICE_AFTER) callPolice(k);
+        if (v) sendToVet(k, v);          // bez wolnego miejsca zwierzę po prostu czeka
         return;
       }
       if (b.h) { b.hs = (b.hs || 0) + dt; if (b.hs >= SICK_HUNGER) makeSick(k, 'glod'); }
@@ -896,7 +908,7 @@
     if (k[0] === 'p') { const P = S.parks[k.slice(1)]; return Math.ceil(PARK_BUILD * (P.st === 1 ? DEM_BACK_SITE : DEM_BACK)); }
     const b = S.builds[k]; return Math.ceil(TYPES[b.type].price * (b.b > 0 ? DEM_BACK_SITE : DEM_BACK));
   }
-  function demCenter(k) { if (k[0] === 'p') return { x: parkX(+k.slice(1)) + 2.5, y: PY + 1.5 }; return placeCenter(k); }
+  function demCenter(k) { if (k[0] === 'p') return { x: parkX(+k.slice(1)) + PLOT / 2, y: PY + 1.5 }; return placeCenter(k); }
   function demolishAt(g) {
     const gx = Math.floor(g.x), gy = Math.floor(g.y), pi = parkAt(g.x, g.y); let key = null;
     if (pi >= 0) { if (S.parks[pi] && S.parks[pi].st >= 1) key = 'p' + pi; }
@@ -904,7 +916,6 @@
     if (!key) { demSel = null; sfx.no(); sayHint('Dotknij budynku, który chcesz zburzyć.', 3); return; }
     if (key[0] !== 'p') {
       const b = S.builds[key];
-      if (b.pol != null) { sfx.no(); return; }
       if (b.type === 'wet' && patients(key) > 0) { sfx.no(); sayHint('Tu leczą się zwierzęta. Poczekaj, aż wyzdrowieją.', 3); return; }
     }
     if (demSel !== key) { demSel = key; sfx.tap(); idle = 0; say('Dotknij jeszcze raz, żeby zburzyć. Część monet wróci.'); return; }
@@ -1220,6 +1231,57 @@
     return Math.hypot(sx - p.x, sy - p.y) <= Math.max(70 * cam.s, 44);
   }
 
+  // ---------- złodziej ----------
+  // Co kilka minut przez bramę wkrada się złodziej i kręci się po ścieżkach. Dziecko łapie go dotknięciem:
+  // złodziej staje, przyjeżdża radiowóz i go zabiera, a zoo dostaje nagrodę. Niezłapany po minucie ucieka z kilkoma monetami.
+  const THIEF_PRIZE = 8, THIEF_LOOT = 5, THIEF_TIME = 60;
+  let thiefTimer = 260;
+  function tickThief(dt) {
+    const T = S.thief;
+    if (T) {
+      T.t += dt;
+      if (T.st === 'held') {
+        T.pol -= dt;
+        if (T.pol <= 0) { const w = g2w(T.gx, T.gy); sparkles.push({ wx: w.x, wy: w.y - 30, t: 0 }); addCoins(THIEF_PRIZE, T.gx, T.gy, 90, 'zlodziej'); S.thief = null; thiefTimer = rand(260, 420); sfx.joy(); say('Policja zabrała złodzieja. Brawo!'); }
+        return;
+      }
+      if (T.t >= THIEF_TIME) {
+        const lost = Math.min(S.coins, THIEF_LOOT), w = g2w(T.gx, T.gy);
+        if (lost > 0) { S.coins -= lost; minusCoin(lost, w.x, w.y - 50); dirty = true; }
+        S.thief = null; thiefTimer = rand(260, 420); sfx.no(); sayHint('Złodziej uciekł i zabrał kilka monet.', 3); return;
+      }
+      if (!T.q.length) {
+        const cx = Math.floor(T.gx), cy = Math.floor(T.gy), opts = NEI.map(([a, c]) => tkey(cx + a, cy + c)).filter((t) => S.network.has(t) && t !== T.prev);
+        const n = opts.length ? pick(opts) : T.prev; T.prev = tkey(cx, cy);
+        if (n) { const [x, y] = n.split(',').map(Number); T.q.push({ x: x + 0.5 + rand(-0.2, 0.2), y: y + 0.5 + rand(-0.2, 0.2) }); T.wait = Math.random() < 0.25 ? rand(0.5, 1.3) : 0; }
+      }
+      if (T.wait > 0) { T.wait -= dt; return; }
+      const n = T.q[0];
+      if (n) { const dx = n.x - T.gx, dy = n.y - T.gy, d = Math.hypot(dx, dy), v = 1.7 * dt; dir4(dx, dy, T); T.phase += dt * 10; if (d <= v) { T.gx = n.x; T.gy = n.y; T.q.shift(); } else { T.gx += dx / d * v; T.gy += dy / d * v; } }
+      return;
+    }
+    thiefTimer -= dt;
+    if (thiefTimer > 0) return;
+    thiefTimer = 30;
+    const gk = tkey(GATE_TILE.x, GATE_TILE.y);
+    if (S.esc || S.connected.length < 3 || S.network.size < 6 || !S.network.has(gk) || S.overlay) return;
+    S.thief = { gx: GATE_TILE.x + 0.5, gy: GATE_TILE.y + 0.5, q: [], t: 0, phase: 0, prev: null, wait: 0, st: 'walk', back: true, flip: false };
+    tone(330, 0.14, 0.06); tone(262, 0.2, 0.06, 0.16);
+    if (!sayOnce('thief', 'Uwaga! Do zoo wkradł się złodziej. Dotknij go, żeby go złapać.')) sayHint('Złodziej! Złap go.', 4);
+  }
+  function catchThief() {
+    const T = S.thief; if (!T || T.st !== 'walk') return false;
+    const from = { x: GXC, y: ROAD }, c = { x: T.gx, y: T.gy }, w = g2w(T.gx, T.gy);
+    T.st = 'held'; T.q = []; T.pol = Math.hypot(c.x - from.x, c.y - from.y) / VEH_V; addVeh('pol', [from, c, from]);
+    sparkles.push({ wx: w.x, wy: w.y - 30, t: 0 }); sfx.joy(); tone(660, 0.3, 0.06); tone(520, 0.3, 0.06, 0.32); idle = 0;
+    say('Złapany! Już jedzie policja.'); return true;
+  }
+  function thiefHit(sx, sy) {
+    const T = S.thief; if (!T || T.st !== 'walk') return false;
+    const w = g2w(T.gx, T.gy), p = w2s(w.x, w.y - 30);
+    return Math.hypot(sx - p.x, sy - p.y) <= Math.max(70 * cam.s, 44);
+  }
+
   // ---------- pora dnia i pogoda ----------
   // Doba trwa DAY_LEN s; noc (0–1) narasta o zmierzchu i słabnie o świcie. Deszcz przychodzi co kilka minut na ~45 s.
   let rainTimer = 200, rainbow = 0;
@@ -1245,7 +1307,7 @@
     if (nk > 0.05) {           // światła: brama, kioski i atrakcje świecą ciepło
       ctx.globalCompositeOperation = 'lighter';
       const lamp = (wx, wy, r) => { const p = w2s(wx, wy), R = r * cam.s, g = ctx.createRadialGradient(p.x, p.y, 2, p.x, p.y, R); g.addColorStop(0, `rgba(255,200,120,${0.38 * nk})`); g.addColorStop(1, 'rgba(255,200,120,0)'); ctx.fillStyle = g; ctx.fillRect(p.x - R, p.y - R, R * 2, R * 2); };
-      { const w = g2w(7.5, BY + 0.6); lamp(w.x, w.y - 60, 170); }
+      { const w = g2w(GXC, BY + 0.6); lamp(w.x, w.y - 60, 170); }
       S.connected.forEach((k) => { if (isAnimal(k)) return; const c = placeCenter(k), w = g2w(c.x, c.y); lamp(w.x, w.y - 40, 150); });
       ctx.globalCompositeOperation = 'source-over';
       // gwiazdy na górze ekranu
@@ -1314,12 +1376,12 @@
       return;
     }
     const fromLeft = Math.random() < 0.5;
-    addGuest(fromLeft ? 3 : 12.5, ROAD, null);
+    addGuest(fromLeft ? GXC - 4.5 : GXC + 5, ROAD, null);
   }
   function addGuest(x, y, car) {
     const g = { id: ++guestSeq, x, y, car, color: guestSeq % 5, ox: rand(-0.24, 0.24), oy: rand(-0.24, 0.24), q: [], st: 'in',
       visits: 2 + (Math.random() < 0.5 ? 1 : 0), seen: [], wait: 0, last: null, phase: rand(0, 6), fade: 0, at: null };
-    g.q = [{ x: 7.5, y: ROAD }, { x: 7.5, y: BY + 1.5 }, { x: 7.5, y: BY + 0.5 }, { x: 7.5, y: BY - 0.5 }];
+    g.q = [{ x: GXC, y: ROAD }, { x: GXC, y: BY + 1.5 }, { x: GXC, y: BY + 0.5 }, { x: GXC, y: BY - 0.5 }];
     if (car) g.q.unshift({ x, y: ROAD });
     S.guests.push(g);
   }
@@ -1338,9 +1400,9 @@
   function goHome(g) {
     const route = bfsPath(g.at || GATE_TILE, [tkey(GATE_TILE.x, GATE_TILE.y)]) || [];
     g.q = route.map((t) => ({ x: t.x + 0.5 + g.ox, y: t.y + 0.5 + g.oy }));
-    g.q.push({ x: 7.5, y: BY + 0.5 }, { x: 7.5, y: BY + 1.5 }, { x: 7.5, y: ROAD });
+    g.q.push({ x: GXC, y: BY + 0.5 }, { x: GXC, y: BY + 1.5 }, { x: GXC, y: ROAD });
     if (g.car) g.q.push({ x: g.car.slot.x, y: ROAD }, { x: g.car.slot.x, y: g.car.slot.y });
-    else g.q.push({ x: Math.random() < 0.5 ? 3 : 12.5, y: ROAD });
+    else g.q.push({ x: Math.random() < 0.5 ? GXC - 4.5 : GXC + 5, y: ROAD });
     g.st = 'out';
   }
   function dropTrash(g, chance) {
@@ -1360,7 +1422,7 @@
       if (d <= move) { g.x = n.x; g.y = n.y; g.q.shift(); move -= d; } else { g.x += dx / d * move; g.y += dy / d * move; move = 0; }
     }
     if (g.q.length) return;
-    if (g.st === 'in') { addCoins(ticket(), 7.5, BY - 0.2, 70, 'bilet'); g.at = { x: GATE_TILE.x, y: GATE_TILE.y }; nextTarget(g); }
+    if (g.st === 'in') { addCoins(ticket(), GXC, BY - 0.2, 70, 'bilet'); g.at = { x: GATE_TILE.x, y: GATE_TILE.y }; nextTarget(g); }
     else if (g.st === 'to') {
       const b = S.builds[g.target];
       if (b && TYPES[b.type].kind === 'kiosk' && isConnected(g.target) && b.st > 0 && Math.random() < BUY) {
@@ -1387,7 +1449,7 @@
     let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
     const addp = (gx, gy) => { const w = g2w(gx, gy); x0 = Math.min(x0, w.x); x1 = Math.max(x1, w.x); y0 = Math.min(y0, w.y); y1 = Math.max(y1, w.y); };
     list.forEach((k) => { const b = plotBase(k); addp(b.x, b.y); addp(b.x + PLOT, b.y); addp(b.x, b.y + PLOT); addp(b.x + PLOT, b.y + PLOT); });
-    addp(7.5, BY + 3.4);                     // brama i droga
+    addp(GXC, BY + 3.4);                     // brama i droga
     addp(0, PY + 3.6); addp(COLS * PLOT, PY + 3.6);   // pas parkingów za drogą
     addp(WISH_POS.x, WISH_POS.y);                   // gość z życzeniem
     y0 -= 70;                                // tabliczki i korony drzew z tyłu
@@ -1447,7 +1509,7 @@
   let idle = 0, hint = null, hintTimer = 0;
   function computeHint() {
     if (S.panel || S.scene !== 'play' || S.overlay) return null;
-    if (!S.plots.size) { const b = g2w(7.5, BY - 2.5); return { x: b.x, y: b.y - 60, wait: 1.5 }; }
+    if (!S.plots.size) { const b = g2w(GXC, BY - 2.5); return { x: b.x, y: b.y - 60, wait: 1.5 }; }
     const builds = Object.keys(S.builds);
     const cut = builds.filter((k) => needOf(k) === 'cut');
     if (cut.length) {
@@ -1531,7 +1593,7 @@
     S.guests.forEach((g) => stepGuest(g, dt));
     S.guests = S.guests.filter((g) => !g.dead);
     tickCars(dt); tickClear(dt); tickHealth(dt); tickRate(dt);
-    tickCrew(dt); tickBabies(dt); tickUpgrades(dt); tickShow(dt); tickEsc(dt); tickWeather(dt); tickBus(dt);
+    tickCrew(dt); tickBabies(dt); tickUpgrades(dt); tickShow(dt); tickEsc(dt); tickThief(dt); tickWeather(dt); tickBus(dt);
     Object.keys(S.bins).forEach((k) => { if (S.bins[k] > 0) { S.bins[k] = Math.max(0, S.bins[k] - dt); if (S.bins[k] === 0) { sfx.build(); dirty = true; } } });
     Object.keys(S.parks).forEach((i) => { const P = S.parks[i]; if (P.st !== 1) return; P.b -= dt; if (P.b <= 0) { P.st = 2; P.b = 0; sfx.joy(); saveNow(); say('Parking gotowy! Jest więcej miejsc na samochody.'); } });
     for (let i = S.veh.length - 1; i >= 0; i--) {
@@ -1664,8 +1726,8 @@
       }
     });
     // wjazd od drogi do bramy
-    diamond(7, BY, 8, BY + 1.95); ctx.fillStyle = PAT.gravel; ctx.fill();
-    edgeLine(7, BY, 7, BY + 1.95); edgeLine(8, BY, 8, BY + 1.95); flushEdges();
+    diamond(GX, BY, GX + 1, BY + 1.95); ctx.fillStyle = PAT.gravel; ctx.fill();
+    edgeLine(GX, BY, GX, BY + 1.95); edgeLine(GX + 1, BY, GX + 1, BY + 1.95); flushEdges();
     // ścieżki: żwir z kamiennym obrzeżem
     S.paths.forEach((tk) => {
       const [x, y] = tk.split(',').map(Number);
@@ -1703,6 +1765,17 @@
       if (w.x < a.x - 110 || w.x > b.x + 110 || w.y < a.y - 30 || w.y > b.y + 170) return;
       objs.push({ d: x + y + 1, f: () => drawObstacleTree(tk, kind, x, y, w) });
     });
+    if (S.thief) { const T = S.thief; objs.push({ d: T.gx + T.gy, f: () => { const w = g2w(T.gx, T.gy); drawHuman('os_zlodziej', w.x, w.y, T.st === 'walk' && T.q.length > 0 && T.wait <= 0, T.phase * 0.8, T, 1.05); } }); }
+    // pas zieleni między działkami: żywopłot wzdłuż ostatniego rzędu i kolumny działki, krzak w narożniku
+    S.plots.forEach((pk) => {
+      const p = plotBase(pk), L = PLOT - 1;
+      for (let i = 0; i < PLOT; i++) [[i, L, i === L ? 'bush' : 'hedge2'], [L, i, 'hedge']].forEach(([lx, ly, nm]) => {
+        if (lx === 2 || ly === 2 || (nm === 'hedge' && i === L)) return;
+        const x = p.x + lx, y = p.y + ly; if (S.obst[tkey(x, y)]) return;
+        const w = g2w(x + 0.5, y + 0.5); if (w.x < a.x - 110 || w.x > b.x + 110 || w.y < a.y - 60 || w.y > b.y + 60) return;
+        objs.push({ d: x + y + 1, f: () => uiSpr(nm, w.x, w.y) });
+      });
+    });
     Object.keys(S.clear).forEach((tk) => { const [x, y] = tk.split(',').map(Number), w = g2w(x + 0.5, y + 0.5); objs.push({ d: x + y + 1.05, f: () => drawWorkerS(w.x - 40, w.y + 8, time * 9 + x, 1, 1) }); });
     Object.keys(S.bins).forEach((tk) => { const [x, y] = tk.split(',').map(Number), w = g2w(x + 0.28, y + 0.28), rem = S.bins[tk]; objs.push({ d: x + y + 0.6, f: () => { if (rem > 0) drawWorkerS(w.x - 26, w.y + 6, time * 9, 1, 0.9); LOOK.drawBin(ctx, w.x, w.y, 1 - 0.6 * rem / BIN_T); } }); });
     S.cars.forEach((c) => objs.push({ d: c.x + c.y, f: () => drawVehicle(c, c.kind || '', c.col) }));
@@ -1710,7 +1783,7 @@
     if (S.esc) { const e = S.esc; objs.push({ d: e.gx + e.gy, f: () => { const w = g2w(e.gx, e.gy); ctx.save(); ctx.translate(w.x, w.y); drawAnimal(e.type, { x: 0, y: 0, wait: e.wait > 0 || !e.q.length ? 1 : 0, step: e.step, seed: 1, sink: 0, jump: 0, flip: e.flip }, ANIM_K * 0.8, 0); ctx.restore(); } }); }
     if (S.show && S.show.on) { const k = S.show.k, c = placeCenter(k); objs.push({ d: c.x + c.y + 1.4, f: () => drawCrowd(k) }); }
     S.veh.forEach((v) => objs.push({ d: v.x + v.y + 0.2, f: () => drawVehicle(v, v.kind, '#fff') }));
-    objs.push({ d: 7.5 + BY + 0.9, f: drawGate });
+    objs.push({ d: GXC + BY + 0.9, f: drawGate });
     Object.keys(S.builds).forEach((k) => { const c = placeCenter(k); objs.push({ d: c.x + c.y, f: () => drawBuilding(k, c) }); });
     S.guests.forEach((g) => objs.push({ d: g.x + g.y, f: () => {
       const w = g2w(g.x, g.y), walking = g.q.length && g.wait <= 0;
@@ -1750,7 +1823,7 @@
     dust.forEach((d) => { const k = d.t / 0.8; ctx.globalAlpha = 0.5 * (1 - k); ctx.fillStyle = '#d8ccae'; ctx.beginPath(); ctx.arc(d.wx, d.wy - k * 34, 7 + k * 16, 0, 7); ctx.fill(); ctx.globalAlpha = 1; });
     buy.forEach(drawSign);
     parkBuyable().forEach((i) => drawSignAt(parkSignPos(i), parkPrice(), 'p' + i));
-    Object.keys(S.parks).forEach((i) => { if (S.parks[i].st === 0) { const w = g2w(parkX(+i) + 2.5, PY + 1.5); drawPlusAt(w.x, w.y); } });
+    Object.keys(S.parks).forEach((i) => { if (S.parks[i].st === 0) { const w = g2w(parkX(+i) + PLOT / 2, PY + 1.5); drawPlusAt(w.x, w.y); } });
     if (S.panel) {
       const [px, py, q] = S.panel.split(',').map(Number), [qx, qy] = QUADS[q], bx = px * PLOT + qx, by = py * PLOT + qy;
       diamond(bx + 0.04, by + 0.04, bx + 1.96, by + 1.96); ctx.strokeStyle = C.gold; ctx.lineWidth = 7; ctx.stroke();
@@ -1762,23 +1835,24 @@
       if (need === 'cut') drawNoPath(w.x + sh, top);
       else if (need === 'h') drawNeed(w.x, top, 'miska', b.hs > SICK_HUNGER * 0.6);
       else if (need === 'st') drawNeed(w.x, top, 'skrzynka');
-      else if (need === 'sick') drawSick(w.x + sh, top, (b.wt || 0) / POLICE_AFTER);
+      else if (need === 'sick') drawSick(w.x + sh, top);
       else if (need === 'show') drawBell(w.x, top);
       else if (b.up > 0) progressBar(w.x, top + 20, 1 - b.up / UP_T);
       else if (isAnimal(k) && b.vet) drawAway(w.x, top, 1 - b.vet.t / CURE_T);
       else if (b.type === 'wet') drawVetPips(w.x, w.y - 148, patients(k));
     });
     S.cars.forEach((c) => { if (c.mad) { const w = g2w(c.x, c.y); drawMad(w.x, w.y - 74); } });
-    if (!S.connected.length && S.plots.size) { const w = g2w(7.5, BY + 2.3); drawNoPath(w.x + 110, w.y - 66); }
+    if (!S.connected.length && S.plots.size) { const w = g2w(GXC, BY + 2.3); drawNoPath(w.x + 110, w.y - 66); }
     if (S.tool === 'dem') drawDemMarks();
     drawRange(); drawUpBtn();
+    if (S.thief && S.thief.st === 'walk') { const w = g2w(S.thief.gx, S.thief.gy), y = w.y - 96 + Math.sin(time * 6) * 4; ctx.beginPath(); ctx.arc(w.x, y, 30 + Math.sin(time * 10) * 3, 0, 7); ctx.strokeStyle = 'rgba(198,74,66,.95)'; ctx.lineWidth = 5; ctx.stroke(); bubble(w.x, y, 24); ctx.fillStyle = '#c64a42'; ctx.fillRect(w.x - 3.5, y - 15, 7, 19); ctx.beginPath(); ctx.arc(w.x, y + 11, 4.2, 0, 7); ctx.fill(); }
     if (S.esc) { const w = g2w(S.esc.gx, S.esc.gy), y = w.y - 92 + Math.sin(time * 6) * 4; bubble(w.x, y, 24); ctx.fillStyle = '#c64a42'; ctx.fillRect(w.x - 3.5, y - 15, 7, 19); ctx.beginPath(); ctx.arc(w.x, y + 11, 4.2, 0, 7); ctx.fill(); }
     if (S.wish) { const p = wishBubble(); drawWish(p.x, p.y, S.wish); }
     minus.forEach((m) => { const k = m.t / 0.9; ctx.globalAlpha = 1 - k; txt('−' + (m.val || 1), m.wx, m.wy - k * 30, 30, C.light); ctx.globalAlpha = 1; });
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   }
   function drawGate() {
-    if (OBJ3D().brama) { const m = g2w(7.5, BY + 0.9); spr('brama', m.x, m.y, 0.85); return; }
+    if (OBJ3D().brama) { const m = g2w(GXC, BY + 0.9); spr('brama', m.x, m.y, 0.85); return; }
     const L0 = g2w(6.92, BY + 0.9), R0 = g2w(8.08, BY + 0.9), H = 66, back = g2w(0, -1), bk = { x: back.x * 0.13, y: back.y * 0.13 };
     const poly = (pts, col) => { ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo : ctx.moveTo).call(ctx, p[0], p[1])); ctx.closePath(); ctx.fillStyle = col; ctx.fill(); };
     const hedge = (x, y) => {
@@ -1804,7 +1878,7 @@
     ctx.save(); ctx.translate((A[0] + B[0]) / 2, (A[1] + B[1]) / 2 - hb / 2); ctx.transform(1, 0.5, 0, 1, 0, 0);
     txt('Z O O', 0, 1, 21, '#f1e6c6'); ctx.restore();
   }
-  const WISH_POS = { x: 11.2, y: ROAD + 1.2 };          // gość z życzeniem stoi po drugiej stronie drogi, obok wejścia
+  const WISH_POS = { x: GXC + 3.7, y: ROAD + 1.2 };          // gość z życzeniem stoi po drugiej stronie drogi, obok wejścia
   function wishBubble() { const w = g2w(WISH_POS.x, WISH_POS.y); return { x: w.x, y: w.y - 104 }; }
   function bubbleY(k, wy) {
     const t = S.builds[k].type, T = TYPES[t];
@@ -1813,9 +1887,9 @@
     return wy - Math.max(95, h + 30);
   }
   // Zwierzęta (animals.js): klatki marszu i spoczynku; tempo kroku zależy od prędkości i długości kroku gatunku.
-  const ANIM_K = 0.9;
+  const ANIM_K = 0.8;
   // Wybieg rysujemy mniejszy niż jego miejsce 2×2: dookoła zostaje pas trawy i sąsiednie wybiegi nie nachodzą na siebie.
-  const ENC_K = 0.78, ENC_IN = 0.1;   // ENC_IN: przesunięcie wybiegu (w polach) w stronę środka działki, żeby wybiegi sąsiednich działek się nie stykały
+  const ENC_K = 0.95, ENC_IN = 0;   // ENC_IN: przesunięcie wybiegu (w polach) w stronę środka działki, żeby wybiegi sąsiednich działek się nie stykały
   const encShift = (k, c) => { const q = +k.split(',')[2]; return k[0] !== 'p' && QUADS[q] ? { x: c.x + (QUADS[q][0] ? -ENC_IN : ENC_IN), y: c.y + (QUADS[q][1] ? -ENC_IN : ENC_IN) } : c; };
   const IDLE_T = { krokodyl: 7, hipopotam: 8, slon: 5, flaming: 6 };
   function drawAnimal(name, a, s, hop) {
@@ -1976,7 +2050,7 @@
         } else {
           const w = g2w(x0 + PLOT * k, PY + 1.5); drawWorkerS(w.x, w.y + 6, time * 9, -1, 1.1);
           if (Math.random() < 0.3) dust.push({ wx: w.x + rand(-30, 30), wy: w.y + rand(-18, 18), t: 0 });
-          const c0 = g2w(x0 + 2.5, PY + 1.5); progressBar(c0.x, c0.y - 74, k);
+          const c0 = g2w(x0 + PLOT / 2, PY + 1.5); progressBar(c0.x, c0.y - 74, k);
         }
       }
     }
@@ -2054,11 +2128,11 @@
     spr(icon, x, y + (icon === 'miska' ? 12 : 14), icon === 'miska' ? 1.25 : 1.05);
   }
   function crossIcon(x, y, s, col = '#c64a42') { ctx.fillStyle = col; ctx.fillRect(x - s * 0.3, y - s, s * 0.6, s * 2); ctx.fillRect(x - s, y - s * 0.3, s * 2, s * 0.6); }
-  // Chore zwierzę: czerwony krzyż; czerwony pierścień pokazuje, ile czasu zostało do przyjazdu policji.
-  function drawSick(x, y, k) {
+  // Chore zwierzę: czerwony krzyż w pulsującym pierścieniu (czeka na wolne miejsce u weterynarza).
+  function drawSick(x, y) {
     y += Math.sin(time * 5) * 3;
     bubble(x, y, 34); crossIcon(x, y, 19);
-    ctx.beginPath(); ctx.arc(x, y, 41, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * clamp(1 - k, 0, 1)); ctx.strokeStyle = 'rgba(198,74,66,.95)'; ctx.lineWidth = 6; ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, 40 + Math.sin(time * 5) * 2.5, 0, 7); ctx.strokeStyle = 'rgba(198,74,66,.9)'; ctx.lineWidth = 5; ctx.stroke();
   }
   function drawAway(x, y, k) { bubble(x, y, 26); crossIcon(x, y, 12, '#5c8a6d'); ctx.beginPath(); ctx.arc(x, y, 31, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k); ctx.strokeStyle = '#5c8a6d'; ctx.lineWidth = 5; ctx.stroke(); }
   function drawVetPips(x, y, n) { for (let i = 0; i < VET_CAP; i++) { const px = x + (i - (VET_CAP - 1) / 2) * 34; ctx.beginPath(); ctx.arc(px, y, 13, 0, 7); ctx.fillStyle = i < n ? '#c64a42' : '#efe7d4'; ctx.fill(); ctx.strokeStyle = 'rgba(30,36,24,.6)'; ctx.lineWidth = 2; ctx.stroke(); } }
@@ -2742,7 +2816,7 @@
     if (S.scene === 'album' || S.scene === 'maps' || S.overlay) return;
     if (S.panel) { if (ui.y >= UH - PANEL_H && ui.x >= STRIP_X - 6) ptr.mode = 'scroll'; return; }
     if (inR(ui, BTN.back) || inR(ui, btnSound()) || inR(ui, btnAlbum()) || inR(ui, starBox()) || inR(ui, rateBox()) || inR(ui, btnSave()) || inR(ui, btnMaps()) || inR(ui, btnBin()) || inR(ui, btnDem())) return;
-    if (escHit(p.x, p.y) || upHit(p.x, p.y) || bubbleHit(p.x, p.y) || signHit(p.x, p.y) || wishHit(p.x, p.y)) return;
+    if (escHit(p.x, p.y) || thiefHit(p.x, p.y) || upHit(p.x, p.y) || bubbleHit(p.x, p.y) || signHit(p.x, p.y) || wishHit(p.x, p.y)) return;
     if (S.tool) { ptr.mode = 'pan'; ptr.lx = p.x; ptr.ly = p.y; return; }
     const tr = trashAt(p.x, p.y);
     if (tr) { ptr.mode = 'trash'; sweep(tr); return; }
@@ -2856,6 +2930,7 @@
     if (S.tool === 'dem') { const w0 = s2w(sx, sy); demolishAt(w2g(w0.x, w0.y)); return; }
     if (S.tool === 'bin') { const w0 = s2w(sx, sy), g0 = w2g(w0.x, w0.y); toggleBin(Math.floor(g0.x), Math.floor(g0.y)); return; }
     if (escHit(sx, sy)) { catchEsc('kid'); return; }
+    if (thiefHit(sx, sy)) { catchThief(); return; }
     if (upHit(sx, sy)) { upgrade(upSel.k); return; }
     if (wishHit(sx, sy)) { sfx.tap(); say('Gość chce zobaczyć: ' + TYPES[S.wish].say); return; }
     const bk = bubbleHit(sx, sy);
@@ -2884,7 +2959,6 @@
     if (t.kind === 'staff') { rt.hop = 0.5; sfx.tap(); rangeSel = { k, t: 4 }; if (needOf(k) === 'cut') { sayHint('Zrób ścieżkę do domku, żeby mógł chodzić do pracy.', 3); return; } say(t.say + '. Pracuje na świecących działkach.'); return; }
     if (t.kind === 'fun') { if (needOf(k) === 'cut') { rt.shake = 0.5; sfx.no(); sayHint('Tu nie ma ścieżki. Goście nie dojdą.', 3); return; } rt.hop = 0.5; sfx.tap(); say(t.say); return; }
     if (b.vet) { sfx.tap(); sayHint(t.say + ' jest u weterynarza.', 3); return; }
-    if (b.pol != null) return;
     if (needOf(k) === 'cut') { rt.shake = 0.5; sfx.no(); idle = 99; hintTimer = 0; sayHint('Tu nie ma ścieżki. Goście nie dojdą.', 3); return; }
     if (b.sick) { rt.shake = 0.5; sfx.no(); idle = 99; hintTimer = 0; sayHint(vets().length ? 'U weterynarza nie ma miejsca. Zbuduj następnego.' : 'To zwierzę jest chore. Zbuduj weterynarza.', 3); return; }
     if (t.kind === 'animal' && b.h) { feed(k); return; }
@@ -2907,7 +2981,7 @@
     for (let y = 1.4; y < Y; y += 3) out.push([out.length % 2 ? 'sosna' : 'drzewo', MAXX + 1.4 + (out.length % 2) * 0.7, y, 1]);
     for (let x = 1.4; x < MAXX + 3; x += 4) out.push([out.length % 3 ? 'drzewo' : 'sosna', x, PY + 5, 1.1]);
     TREES = out;
-    WAITING = [[6.5, ROAD - 0.2], [7.3, ROAD + 0.1], [8.3, ROAD - 0.3]];
+    WAITING = [[GXC - 1, ROAD - 0.2], [GXC - 0.2, ROAD + 0.1], [GXC + 0.8, ROAD - 0.3]];
   }
   let WAITING = [];
   let prev = 0;
@@ -2948,7 +3022,7 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) saveNow(); });
 
   window.__zoo = {
-    S, RT, tick, MAPS, openSlot, enterMap, makeSick, callPolice, freeVet, rateTarget, spawnGuest, parkSlots, buyPark, buildPark, orderClear, build, toggleBin, slotInfo, deleteSlot, slotCards, bubbleHit, freeTileAt, TYPES, g2w, w2s, tkey, placeCenter, plotPrice, buyablePlots, missingRoute, attraction, spawnEvery, ticket, unlocked, saveNow, recompute,
+    S, RT, tick, MAPS, openSlot, enterMap, makeSick, freeVet, thief: () => S.thief, sendThief: () => { thiefTimer = 0; }, catchThief, PLOT, rateTarget, spawnGuest, parkSlots, buyPark, buildPark, orderClear, build, toggleBin, slotInfo, deleteSlot, slotCards, bubbleHit, freeTileAt, TYPES, g2w, w2s, tkey, placeCenter, plotPrice, buyablePlots, missingRoute, attraction, spawnEvery, ticket, unlocked, saveNow, recompute,
     hint: () => hint, idle: () => idle, cam, PERF, view, contentBox, glStats: () => G ? { draws: G.stats.draws, verts: G.stats.verts, texMB: Math.round(G.stats.texBytes / 1048576), tex: G.stats.texCount, dpr: DPR } : null,
     timers(v) {
       if (v) { if ('hunger' in v) hungerTimer = v.hunger; if ('wish' in v) wishTimer = v.wish; if ('show' in v) showTimer = v.show; if ('esc' in v) escTimer = v.esc; if ('rain' in v) rainTimer = v.rain; if ('bus' in v) busTimer = v.bus; }

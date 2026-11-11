@@ -3,7 +3,7 @@
    Przy instalacji zapisujemy w pamięci urządzenia WSZYSTKIE pliki gry (grafika, dźwięk, czcionka).
    Potem gra bierze pliki z pamięci (start bez sieci i bez czekania), a nową wersję pobiera w tle:
    gdy się pobierze cała, zastępuje starą przy następnym uruchomieniu. */
-const CACHE = 'zoo-8df0c505a5';
+const CACHE = 'zoo-6b3757d606';
 const FILES = [
  "./",
  "./index.html",
@@ -93,6 +93,7 @@ const FILES = [
  "./sprites2/os_robotnik.webp",
  "./sprites2/os_sprzatacz.webp",
  "./sprites2/os_weterynarz.webp",
+ "./sprites2/os_zlodziej.webp",
  "./sprites2/p_flaming.webp",
  "./sprites2/p_foka.webp",
  "./sprites2/p_hipopotam.webp",
@@ -119,7 +120,10 @@ const FILES = [
  "./sprites2/t_drzewo.webp",
  "./sprites2/t_sosna.webp",
  "./sprites2/tygrys.webp",
+ "./sprites2/ui_bush.webp",
  "./sprites2/ui_hand.webp",
+ "./sprites2/ui_hedge.webp",
+ "./sprites2/ui_hedge2.webp",
  "./sprites2/ui_logo.webp",
  "./sprites2/ui_play.webp",
  "./sprites2/wielblad.webp",

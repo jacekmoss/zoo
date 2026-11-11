@@ -19,7 +19,7 @@ Zasady:
 - Teren: działki mają drzewa, skały, piach, mokradła i jeziora. Uprząta się je tylko ręcznie: dotknięcie przeszkody wysyła robotnika (1–3 monety, bez monet za darmo); dotknięcie pustego fragmentu miejsca zleca całe miejsce. Na przeszkodzie nie da się budować.
 - Budowa trwa (12–30 s), widać plac, rusztowanie i robotników; dotykanie placu lekko przyspiesza.
 - Zadowolenie 0–100 (buźka u góry): karmienie, choroby, śmieci, kioski, różnorodność, parking. Mnoży liczbę gości (0,45–1,55 raza). Tempo stroi się stałymi na górze `game.js` oraz w `spawnEvery` i `buildTime`.
-- Choroby: po 90 s głodu albo rzadko losowo (od 3 wybiegów). Weterynarz ma 2 miejsca i leczy 40 s; karetka zabiera zwierzę sama. Bez wolnego miejsca po 75 s przyjeżdża policja i zabiera zwierzę.
+- Choroby: po 90 s głodu albo rzadko losowo (od 3 wybiegów). Weterynarz ma 2 miejsca i leczy 40 s; karetka zabiera zwierzę sama. Bez wolnego miejsca chore zwierzę czeka w wybiegu, aż miejsce się zwolni (policja nie zabiera już zwierząt).
 - Parking: za drogą, działka 5, 9, 13… monet + budowa 12. Przy drodze są 4 miejsca, każdy parking daje 8. Gdy brak miejsc, kierowcy się denerwują i zadowolenie spada.
 - Śmietnik (przycisk w lewym dolnym rogu, 5 monet): stoi na ścieżce, w promieniu 2 pól goście nie śmiecą.
 - Parking (od 2026-11-09): każdy gotowy parking podnosi limit gości o 5 (`PARK_GUESTS`) i skraca odstęp między gośćmi o 15% (`PARK_RATE`).
@@ -32,6 +32,10 @@ Zasady:
   Poziom zwiększa przyciąganie o 35%, przyspiesza młode i pozwala na więcej młodych.
 - Młode: zadbane zwierzę po ~200 s ma młode (najwyżej 1 + poziom wybiegu); młode chodzi przy mamie i przyciąga gości.
 - Pokazy: co 1,5–2,5 min nad wybiegiem (foka, małpa, słoń, pingwin, kangur, niedźwiedź, żyrafa, lew) dzwoni dzwonek; dotknięcie = 8 s pokazu, widzowie i monety. Bez dotknięcia dzwonek znika bez kary.
+- Złodziej: co kilka minut (od 3 połączonych budynków) wkrada się przez bramę i chodzi po ścieżkach. Dotknięcie go zatrzymuje,
+  przyjeżdża radiowóz i go zabiera (+8 monet). Niezłapany przez 60 s ucieka z 5 monetami. Stałe: `THIEF_PRIZE`, `THIEF_LOOT`, `THIEF_TIME`.
+- Działka ma 6×6 pól: miejsca 2×2, krzyż ścieżek i pas zieleni z żywopłotem (ostatni rząd i kolumna), więc wybiegi sąsiednich działek
+  się nie stykają. Stare zapisy (siatka 5×5) przelicza `regrid()` przy wczytaniu.
 - Ucieczka: rzadko małe zwierzę chodzi po ścieżkach (zadowolenie −8). Dotknięcie łapie je (+3 monety), opiekun w pobliżu łapie je sam, po 75 s wraca samo.
 - Doba 6 min: noc ~1/5 czasu (ciemniej, latarnie, zwierzęta śpią i nie głodnieją, mniej gości). Deszcz co 3–5 min przez ~45 s (parasole, mniej gości), potem tęcza.
 - Wycieczka szkolna: co 4–6 min (od 4 zwierząt, zadowolenie ≥ 35, w dzień i bez deszczu) autobus z 6 osobami; po wizycie premia 10 + zadowolenie/10.

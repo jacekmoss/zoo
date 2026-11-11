@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parent.parent
 BLENDER = os.environ.get('BLENDER', r'C:\Users\Jacek\tools\blender-5.3.0-windows-x64\blender.exe')
 # h: wysokość postaci w jednostkach gry; len: długość pojazdu
 CFG = {'os_mezczyzna': {'h': 46}, 'os_kobieta': {'h': 43}, 'os_chlopiec': {'h': 31}, 'os_dziewczynka': {'h': 30}, 'os_babcia': {'h': 41},
-       'os_opiekun': {'h': 46}, 'os_sprzatacz': {'h': 46}, 'os_dostawca': {'h': 46}, 'os_weterynarz': {'h': 43}, 'os_robotnik': {'h': 46},
+       'os_opiekun': {'h': 46}, 'os_sprzatacz': {'h': 46}, 'os_dostawca': {'h': 46}, 'os_weterynarz': {'h': 43}, 'os_robotnik': {'h': 46}, 'os_zlodziej': {'h': 46},
        'auto_osobowe': {'len': 84}, 'auto_suv': {'len': 88}, 'auto_autobus': {'len': 165}, 'auto_karetka': {'len': 100}, 'auto_radiowoz': {'len': 90}}
 names = [a for a in sys.argv[1:] if not a.startswith('--')] or list(CFG)
 def run(n):

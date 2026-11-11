@@ -25,9 +25,9 @@ require('fs').mkdirSync(OUT, { recursive: true });
     for (let py = 0; py < m.rows; py++) for (let px = 0; px < m.cols; px++) {
       if (Math.random() > frac && !(px === 1 && py === m.rows - 1)) continue;
       S.plots.add(px + ',' + py);
-      for (let i = 0; i < 5; i++) { S.paths.add((px * 5 + 2) + ',' + (py * 5 + i)); S.paths.add((px * 5 + i) + ',' + (py * 5 + 2)); }
+      for (let i = 0; i < 6; i++) { S.paths.add((px * 6 + 2) + ',' + (py * 6 + i)); S.paths.add((px * 6 + i) + ',' + (py * 6 + 2)); }
     }
-    Object.keys(S.obst).forEach(k => { const [x, y] = k.split(',').map(Number); if (S.plots.has(Math.floor(x / 5) + ',' + Math.floor(y / 5))) delete S.obst[k]; });
+    Object.keys(S.obst).forEach(k => { const [x, y] = k.split(',').map(Number); if (S.plots.has(Math.floor(x / 6) + ',' + Math.floor(y / 6))) delete S.obst[k]; });
     S.plots.forEach(pk => { for (let q = 0; q < 4; q++) { const t = types[n++ % types.length]; Z.build(pk + ',' + q, t); const nb = S.builds[pk + ',' + q]; if (nb) nb.b = 0.01; S.found[t] = 1; } }); S.starsSeen = 99;
     Z.enterMap ; Z.recompute();
     

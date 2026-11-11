@@ -727,5 +727,21 @@ window.ZOO_S2 = {
   },
   "per": 1,
   "kind": "prop"
+ },
+ "os_zlodziej": {
+  "file": "sprites2/os_zlodziej.webp",
+  "fw": 137,
+  "fh": 170,
+  "cols": 5,
+  "px": 3,
+  "ax": 47.05,
+  "ay": 144.44,
+  "n": {
+   "walk": 8,
+   "stand": 1
+  },
+  "per": 9,
+  "kind": "person",
+  "h": 46
  }
 };
