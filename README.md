@@ -62,7 +62,11 @@ Jak powstają klatki (Blender 5.3 w katalogu `tools` użytkownika; zmienna środ
    potem `python tools/build_people.py [nazwy]` (`person.py` dla `os_*`, `prop.py` dla `auto_*`).
    Drzewa: `prop.py` z opcjami `h` i `cutBase` (usuwa podstawkę), wynik w `models/t_*`.
 3. `python tools/pack2.py [nazwy]` skleja klatki w arkusze `sprites2/`. Podglądy: `renders/podglad2/`.
-4. Po każdej zmianie plików gry: `python tools/make_sw.py` (lista plików do działania bez internetu).
+4. Wybiegi: `python tools/build3d.py _laka ...` (three.js, `tools/render_all.json`). Opcja `squash`/`squashFrom` obniża drzewa i paśniki,
+   żeby nie zasłaniały sąsiadów. W grze wybieg jest rysowany w skali `ENC_K` i przesunięty o `ENC_IN` pola do środka działki
+   (pas trawy dookoła, wybiegi nie nachodzą na siebie).
+5. Szyld „MOJE ZOO”, przycisk startu i dłoń podpowiedzi: `tools/blender/ui.py` (Cycles) → `python tools/pack_ui.py` → `sprites2/ui_*.webp`, `sprites2/ui.js`.
+6. Po każdej zmianie plików gry: `python tools/make_sw.py` (lista plików do działania bez internetu).
 
 Testy: `node tools/probe.js [katalog] [adres]` (płynność i zrzuty na pełnym zoo), `node tools/shot.js [katalog]` (zrzuty ekranów);
 oba potrzebują serwera gry i Playwrighta (`NODE_PATH` na `node_modules` z Playwrightem, np. z projektu onko-karta).

@@ -57,7 +57,7 @@ if not preview:
             continue
         out = ROOT / 'models' / o['model'] / 'render'
         opts = {k: v for k, v in o.items() if k not in ('model', 'pool', 'block')}
-        if node('wybieg', o['model'], {'px': 3, 'fill': 1.14, **opts}, out):
+        if node('wybieg', o['model'], {'px': 3, 'fill': 1.14, 'squash': 0.55, 'squashFrom': 0.25, **opts}, out):   # squash: niższe drzewa, nie zasłaniają sąsiadów
             entry, fs = sprites.enclosure(key, out)
             if o.get('pool'):
                 x, y, rx, ry = o['pool']; entry['pool'] = {'x': x, 'y': y, 'rx': rx, 'ry': ry}

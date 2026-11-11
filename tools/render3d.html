@@ -201,6 +201,15 @@ window.renderEnclosure = async (o) => {
   root.updateMatrixWorld(true);
   const b2 = new THREE.Box3().setFromObject(root);
   root.position.set(-fc.x * root.scale.x, -b2.min.y, -fc.z * root.scale.z); root.updateMatrixWorld(true);
+  // obniżanie wysokich elementów (drzewa, bambusy, paśniki): wszystko powyżej squashFrom jest ściskane w pionie,
+  // żeby wybieg nie zasłaniał tego, co stoi za nim. Wysokości w jednostkach świata (podstawa wybiegu = fill).
+  if (o.squash && o.squash < 1) {
+    const h0 = o.squashFrom ?? 0.25, kq = o.squash, v2 = new THREE.Vector3();
+    root.traverse((m) => { if (!m.isMesh) return;
+      m.geometry = m.geometry.clone(); const a = m.geometry.attributes.position, inv = new THREE.Matrix4().copy(m.matrixWorld).invert();
+      for (let i = 0; i < a.count; i++) { v2.fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld); if (v2.y > h0) { v2.y = h0 + (v2.y - h0) * kq; v2.applyMatrix4(inv); a.setXYZ(i, v2.x, v2.y, v2.z); } }
+      a.needsUpdate = true; });
+  }
   // izometria 2:1: azymut 45°, elewacja atan(0.5)≈26.57° (dimetria jak w grze)
   const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, -20, 20);
   const el = Math.atan(0.5), az = Math.PI / 4;

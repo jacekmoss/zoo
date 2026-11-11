@@ -216,6 +216,9 @@
   // Każdy arkusz to jeden obrazek: kierunek „f” (idzie w prawo i w dół ekranu), potem „b” (w prawo i w górę);
   // pozostałe dwa kierunki to odbicia lustrzane. Obrazki wczytują się dopiero, gdy są potrzebne (pamięć tabletu).
   const S2 = window.ZOO_S2 || {}, S2IMG = {};
+  // Szyld, przycisk startu i dłoń podpowiedzi: rendery 3D z Blendera (tools/blender/ui.py → tools/pack_ui.py → sprites2/ui_*.webp)
+  const UI3 = window.ZOO_UI || {}, UIIM = {};
+  Object.keys(UI3).forEach((k) => { const im = new Image(); im.onload = () => { UIIM[k] = im; }; im.src = UI3[k].file; });
   function s2img(name) {
     let e = S2IMG[name];
     if (!e) { e = S2IMG[name] = { im: null }; const im = new Image(); im.onload = () => { e.im = im; }; im.onerror = () => console.error('Nie wczytano', name); im.src = S2[name].file; }
@@ -1500,7 +1503,7 @@
         a.jump = Math.max(0, a.jump - dt);
         const wet = inPool(pool, a.x, a.y);
         a.sink = lerp(a.sink, wet ? (SINK[type] || 0) : 0, 1 - Math.pow(0.03, dt));
-        if (wet && !a.wet && (SINK[type] || 0) > 0.3) { const c = placeCenter(k), w = g2w(c.x, c.y); splashes.push({ wx: w.x + a.x, wy: w.y + a.y, t: 0 }); }
+        if (wet && !a.wet && (SINK[type] || 0) > 0.3) { const c = placeCenter(k), w = g2w(c.x, c.y); splashes.push({ wx: w.x + a.x * ENC_K, wy: w.y + a.y * ENC_K, t: 0 }); }
         a.wet = wet;
         if (a.gone) return;                                                               // uciekło z wybiegu
         if (hungry || B0.sick || away(B0)) { a.wait = Math.max(a.wait, 0.5); return; }   // głodne zwierzę stoi przy misce
@@ -1811,6 +1814,9 @@
   }
   // Zwierzęta (animals.js): klatki marszu i spoczynku; tempo kroku zależy od prędkości i długości kroku gatunku.
   const ANIM_K = 0.9;
+  // Wybieg rysujemy mniejszy niż jego miejsce 2×2: dookoła zostaje pas trawy i sąsiednie wybiegi nie nachodzą na siebie.
+  const ENC_K = 0.78, ENC_IN = 0.1;   // ENC_IN: przesunięcie wybiegu (w polach) w stronę środka działki, żeby wybiegi sąsiednich działek się nie stykały
+  const encShift = (k, c) => { const q = +k.split(',')[2]; return k[0] !== 'p' && QUADS[q] ? { x: c.x + (QUADS[q][0] ? -ENC_IN : ENC_IN), y: c.y + (QUADS[q][1] ? -ENC_IN : ENC_IN) } : c; };
   const IDLE_T = { krokodyl: 7, hipopotam: 8, slon: 5, flaming: 6 };
   function drawAnimal(name, a, s, hop) {
     const m = S2[name]; if (!m) return;
@@ -1845,6 +1851,7 @@
     ctx.globalAlpha = 1; ctx.lineCap = 'butt'; ctx.restore();
   }
   function drawBuilding(k, c) {
+    if (TYPES[S.builds[k].type].kind === 'animal') c = encShift(k, c);
     if (S.builds[k].b > 0) { const w0 = g2w(c.x, c.y); drawSite(k, c, w0, TYPES[S.builds[k].type], S.builds[k]); return; }
     const w = g2w(c.x, c.y), b = S.builds[k], t = TYPES[b.type], rt = RT[k] || makeRT(k);
     const pop = easeOut(rt.pop), sc = 0.55 + 0.45 * pop;
@@ -1859,6 +1866,7 @@
       kioskSpr(b.type, hop); ctx.globalAlpha = 1;
     } else {
       const E3 = enc3d(b.type), E = E3 || encOf(t.biome), pool = E3 ? null : LOOK.POOL[t.biome];
+      ctx.scale(ENC_K, ENC_K);
       blit(E.back, 0, 0);
       if (pool) drawWater(pool);
       if (b.h || rt.fed > 0) {
@@ -2009,7 +2017,7 @@
     if (prog > 0.12) {
       const p = clamp((prog - 0.12) / 0.8, 0, 1), top = 70 - 240 * p;
       ctx.save(); ctx.beginPath(); ctx.rect(-135, top, 270, 240 * p + 4); ctx.clip();
-      if (t.kind === 'animal') { const E = enc3d(b.type) || encOf(t.biome); blit(E.back, 0, 0); blit(E.front, 0, 0); }
+      if (t.kind === 'animal') { const E = enc3d(b.type) || encOf(t.biome); ctx.scale(ENC_K, ENC_K); blit(E.back, 0, 0); blit(E.front, 0, 0); }
       else { if (!OBJ3D()[t.kind === 'kiosk' ? 'kiosk_' + b.type : b.type]) blit(PATIO, 0, 0); if (t.kind === 'kiosk') kioskSpr(b.type, 0); else spr(b.type === 'wet' ? 'wet' : b.type, 0, 0, 1); }
       ctx.restore();
     }
@@ -2285,7 +2293,12 @@
     // dłoń
     if (hint && S.scene === 'play' && !S.panel && !S.overlay && idle >= hint.wait) {
       const p = hint.ui ? { x: hint.x * u, y: hint.y * u } : w2s(hint.x, hint.y), bob = Math.abs(Math.sin(time * 3.5)) * 16;
-      spr('dlon', p.x / u - 47, p.y / u - 6 + bob, 1.05);
+      const H = UI3.hand, x = p.x / u, y = p.y / u;
+      // krąg „tu dotknij” rozchodzi się w chwili, gdy palec dotyka celu
+      const ph = (time * 3.5 / Math.PI) % 1;
+      ctx.beginPath(); ctx.ellipse(x, y, 14 + ph * 30, (14 + ph * 30) * 0.8, 0, 0, 7); ctx.strokeStyle = `rgba(246,214,130,${0.85 * (1 - ph)})`; ctx.lineWidth = 4; ctx.stroke();
+      if (H && UIIM.hand) { const k = 118 / H.bh; ctx.drawImage(UIIM.hand, x - H.tx * k, y + 4 + bob - H.ty * k, H.w * k, H.h * k); }
+      else spr('dlon', x - 47, y - 6 + bob, 1.05);
     }
     if (S.scene === 'album') drawAlbum();
     if (S.scene === 'maps') drawMaps();
@@ -2544,7 +2557,7 @@
   const PARADE_S = 1.7;
   // [zwierzę, x (ułamek szerokości), przesunięcie y, odbicie, tyłem, skala]
   const HERD = [['zyrafa', 0.845, -34, true, false, 1], ['slon', 0.63, -6, true, false, 1], ['zebra', 0.93, 22, true, false, 1], ['lew', 0.12, 4, false, false, 1], ['flaming', 0.26, 30, false, false, 1]];
-  const playBtn = () => ({ x: UW / 2, y: UH * 0.47, r: 86 });
+  const playBtn = () => ({ x: UW / 2, y: UH * 0.53, r: 96 });
   
   function seeded(n) { let s = n; return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }; }
   function titleLayer(draw) {
@@ -2636,37 +2649,23 @@
       });
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(TFG, 0, 0); ctx.setTransform(DPR * u, 0, 0, DPR * u, 0, 0);
-    // znak „Moje Zoo”
-    const ly = UH * 0.17, cx = UW / 2;
-    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 4;
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '10px';
-    txt('MOJE ZOO', cx + 5, ly, 112, '#fbf3df');
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
-    ctx.restore();
-    { const rw = 210, ry = ly + 74;
-      const lg = (a, b) => { const g = ctx.createLinearGradient(a, 0, b, 0); g.addColorStop(0, 'rgba(214,174,82,0)'); g.addColorStop(1, 'rgba(214,174,82,.9)'); return g; };
-      ctx.fillStyle = lg(cx - rw - 30, cx - 30); ctx.fillRect(cx - rw - 30, ry, rw, 2);
-      ctx.fillStyle = lg(cx + rw + 30, cx + 30); ctx.fillRect(cx + 30, ry, rw, 2);
-      // ślad łapy pośrodku
-      ctx.fillStyle = C.gold; ctx.beginPath(); ctx.ellipse(cx, ry + 5, 9, 7.5, 0, 0, 7); ctx.fill();
-      [[-11, -7], [-4, -13], [4, -13], [11, -7]].forEach(([a, b]) => { ctx.beginPath(); ctx.ellipse(cx + a, ry + 5 + b, 3.6, 4.4, a * 0.04, 0, 7); ctx.fill(); });
+    // szyld „MOJE ZOO” wisi na linach u góry ekranu i lekko się kołysze
+    const cx = UW / 2, L = UI3.logo;
+    if (L && UIIM.logo) {
+      const k = Math.min(600, UW * 0.5) / L.bw, top = -L.h * k * 0.2;
+      ctx.save(); ctx.translate(cx, top); ctx.rotate(Math.sin(time * 0.9) * 0.012); ctx.drawImage(UIIM.logo, -(L.bx + L.bw / 2) * k, 0, L.w * k, L.h * k); ctx.restore();
     }
     if (plain) { ctx.restore(); return; }
-    // przycisk „graj”: złoty pierścień, ciemny środek, fala światła
-    const b = playBtn();
+    // przycisk startu: złoty pierścień z łapą, fala światła dookoła
+    const b = playBtn(), P = UI3.play;
     for (let i = 0; i < 2; i++) {
       const ph = (time * 0.55 + i * 0.5) % 1;
-      ctx.beginPath(); ctx.arc(b.x, b.y, b.r + 6 + ph * 70, 0, 7); ctx.strokeStyle = `rgba(246,214,130,${0.45 * (1 - ph)})`; ctx.lineWidth = 3; ctx.stroke();
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r + 4 + ph * 70, 0, 7); ctx.strokeStyle = `rgba(246,214,130,${0.5 * (1 - ph)})`; ctx.lineWidth = 3; ctx.stroke();
     }
-    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 10;
-    const rg = ctx.createLinearGradient(b.x - b.r, b.y - b.r, b.x + b.r, b.y + b.r); rg.addColorStop(0, '#f6dd92'); rg.addColorStop(0.5, '#d4a443'); rg.addColorStop(1, '#9c731f');
-    ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7); ctx.fillStyle = rg; ctx.fill(); ctx.restore();
-    const ig = ctx.createRadialGradient(b.x - 20, b.y - 26, 8, b.x, b.y, b.r - 9); ig.addColorStop(0, '#47603c'); ig.addColorStop(1, '#1c2717');
-    ctx.beginPath(); ctx.arc(b.x, b.y, b.r - 9, 0, 7); ctx.fillStyle = ig; ctx.fill();
-    ctx.beginPath(); ctx.arc(b.x, b.y, b.r - 9, 0, 7); ctx.strokeStyle = 'rgba(60,40,8,.6)'; ctx.lineWidth = 2; ctx.stroke();
-    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 3;
-    ctx.fillStyle = '#fbf3df'; ctx.beginPath(); ctx.moveTo(b.x - 24, b.y - 38); ctx.lineTo(b.x + 42, b.y); ctx.lineTo(b.x - 24, b.y + 38); ctx.closePath();
-    ctx.lineJoin = 'round'; ctx.lineWidth = 10; ctx.strokeStyle = '#fbf3df'; ctx.stroke(); ctx.fill(); ctx.lineJoin = 'miter'; ctx.restore();
+    if (P && UIIM.play) {
+      const k = b.r * 2 / P.bw * (1 + 0.025 * Math.sin(time * 2.2));
+      ctx.drawImage(UIIM.play, b.x - (P.bx + P.bw / 2) * k, b.y - (P.by + P.bh / 2) * k, P.w * k, P.h * k);
+    }
     ctx.restore();
   }
 

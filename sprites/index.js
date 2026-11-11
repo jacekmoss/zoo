@@ -7,16 +7,16 @@ window.ZOO_3D = {
    "back": {
     "file": "sprites/wybieg_zyrafa_back.webp",
     "x": -124.67,
-    "y": -150.67,
+    "y": -119.67,
     "w": 235.0,
-    "h": 205.33
+    "h": 174.33
    },
    "front": {
     "file": "sprites/wybieg_zyrafa_front.webp",
     "x": -120.33,
-    "y": -72.67,
+    "y": -118.33,
     "w": 230.33,
-    "h": 113.67
+    "h": 159.33
    },
    "block": [
     [
@@ -47,16 +47,16 @@ window.ZOO_3D = {
    "back": {
     "file": "sprites/wybieg__pustynia_back.webp",
     "x": -122.67,
-    "y": -122.67,
+    "y": -104.33,
     "w": 230.67,
-    "h": 178.0
+    "h": 159.67
    },
    "front": {
     "file": "sprites/wybieg__pustynia_front.webp",
     "x": -114.67,
-    "y": -61.33,
+    "y": -51.67,
     "w": 219.0,
-    "h": 100.67
+    "h": 91.0
    },
    "block": [
     [
@@ -121,9 +121,9 @@ window.ZOO_3D = {
    "back": {
     "file": "sprites/wybieg__laka_back.webp",
     "x": -122.33,
-    "y": -100.67,
+    "y": -89.33,
     "w": 235.67,
-    "h": 156.33
+    "h": 145.0
    },
    "front": {
     "file": "sprites/wybieg__laka_front.webp",
@@ -179,16 +179,16 @@ window.ZOO_3D = {
    "back": {
     "file": "sprites/wybieg__sawanna_back.webp",
     "x": -122.33,
-    "y": -131.67,
+    "y": -104.0,
     "w": 236.33,
-    "h": 187.33
+    "h": 159.67
    },
    "front": {
     "file": "sprites/wybieg__sawanna_front.webp",
     "x": -120.67,
-    "y": -113.33,
+    "y": -35.33,
     "w": 228.67,
-    "h": 154.67
+    "h": 76.67
    },
    "block": [
     [
@@ -213,16 +213,16 @@ window.ZOO_3D = {
    "back": {
     "file": "sprites/wybieg__bambusy_back.webp",
     "x": -124.33,
-    "y": -158.33,
+    "y": -129.0,
     "w": 243.67,
-    "h": 206.0
+    "h": 176.67
    },
    "front": {
     "file": "sprites/wybieg__bambusy_front.webp",
     "x": -114.0,
-    "y": -33.33,
+    "y": -75.0,
     "w": 222.67,
-    "h": 69.0
+    "h": 110.67
    },
    "block": []
   }
@@ -234,16 +234,16 @@ window.ZOO_3D = {
    "back": {
     "file": "sprites/wybieg__las_back.webp",
     "x": -130.0,
-    "y": -150.0,
+    "y": -117.33,
     "w": 241.33,
-    "h": 205.0
+    "h": 172.33
    },
    "front": {
     "file": "sprites/wybieg__las_front.webp",
     "x": -130.0,
-    "y": -97.67,
+    "y": -35.0,
     "w": 239.67,
-    "h": 142.0
+    "h": 79.33
    },
    "block": []
   }
