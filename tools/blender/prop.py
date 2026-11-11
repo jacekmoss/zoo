@@ -20,8 +20,22 @@ for p in me.polygons: p.use_smooth = True
 n = len(me.vertices); co = np.empty(n * 3); me.vertices.foreach_get('co', co); co = co.reshape(n, 3)
 yaw = math.radians(O.get('yaw', 90)); c, s = math.cos(yaw), math.sin(yaw)
 co = co @ np.array([[c, s, 0], [-s, c, 0], [0, 0, 1]])
-mn, mx = co.min(0), co.max(0); L = mx[0] - mn[0]
-co = (co - np.array([(mn[0] + mx[0]) / 2, (mn[1] + mx[1]) / 2, mn[2]])) / L
+mn, mx = co.min(0), co.max(0); L = (mx[2] - mn[2]) if 'h' in O else (mx[0] - mn[0])
+if O.get('cutBase'):     # drzewa z generatora stoją na kwadratowej podstawce: usuwamy wszystko tuż przy ziemi poza pniem
+    import bmesh
+    zc = mn[2] + (mx[2] - mn[2]) * O['cutBase']
+    top = co[co[:, 2] > mn[2] + (mx[2] - mn[2]) * 0.5]; cxy = np.array([np.median(co[(co[:, 2] > zc) & (co[:, 2] < zc * 1.0 + (mx[2] - mn[2]) * 0.06 + zc - zc)][:, 0]) if ((co[:, 2] > zc) & (co[:, 2] < zc + (mx[2] - mn[2]) * 0.06)).any() else 0, 0])
+    ring = co[(co[:, 2] > zc) & (co[:, 2] < zc + (mx[2] - mn[2]) * 0.06)]
+    tc = ring[:, :2].mean(0) if len(ring) else np.zeros(2); tr = (np.linalg.norm(ring[:, :2] - tc, axis=1).max() * 1.15) if len(ring) else 0.05
+    bm = bmesh.new(); bm.from_mesh(me); bm.verts.ensure_lookup_table()
+    bad = [f for f in bm.faces if all(co[v.index][2] < zc for v in f.verts) and any(np.linalg.norm(co[v.index][:2] - tc) > tr for v in f.verts)]
+    bmesh.ops.delete(bm, geom=bad, context='FACES'); bm.to_mesh(me); bm.free()
+    keep = np.empty(len(me.vertices) * 3); me.vertices.foreach_get('co', keep); keep = keep.reshape(-1, 3)
+    yaw2 = np.array([[c, s, 0], [-s, c, 0], [0, 0, 1]]); co = keep @ yaw2; n = len(co)
+    mn2 = co.min(0); mx2 = co.max(0); cen0 = np.array([tc[0], tc[1], mn2[2]]); L = (mx2[2] - mn2[2])
+    co = (co - cen0) / L
+else:
+    co = (co - np.array([(mn[0] + mx[0]) / 2, (mn[1] + mx[1]) / 2, mn[2]])) / L
 
 for eng in ('BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT'):
     try: sc.render.engine = eng; break
@@ -58,7 +72,7 @@ lo = np.array([1e9, 1e9]); hi = -lo
 for v in posed.values():
     for pts in (v, shadow_of(v)):
         uv = np.stack([pts @ right, pts @ up], 1); lo = np.minimum(lo, uv.min(0)); hi = np.maximum(hi, uv.max(0))
-PX = O.get('px', 3); ppu = O['len'] * PX / 0.79            # długość wzdłuż przekątnej ekranu
+PX = O.get('px', 3); ppu = (O['h'] * PX / math.cos(el)) if 'h' in O else (O['len'] * PX / 0.79)   # wysokość albo długość wzdłuż przekątnej ekranu
 pad = 3 / ppu; lo -= pad; hi += pad
 Wp, Hp = int(math.ceil((hi[0] - lo[0]) * ppu)), int(math.ceil((hi[1] - lo[1]) * ppu)); hi = lo + np.array([Wp, Hp]) / ppu
 cen = (lo + hi) / 2

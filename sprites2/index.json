@@ -684,5 +684,47 @@
   "w": 132,
   "h": 123,
   "kind": "portrait"
+ },
+ "t_drzewo": {
+  "file": "sprites2/t_drzewo.webp",
+  "fw": 423,
+  "fh": 437,
+  "cols": 1,
+  "px": 2,
+  "ax": 168.17,
+  "ay": 374.4,
+  "n": {
+   "stand": 1
+  },
+  "per": 1,
+  "kind": "prop"
+ },
+ "t_sosna": {
+  "file": "sprites2/t_sosna.webp",
+  "fw": 278,
+  "fh": 403,
+  "cols": 2,
+  "px": 2,
+  "ax": 110.11,
+  "ay": 362.45,
+  "n": {
+   "stand": 1
+  },
+  "per": 1,
+  "kind": "prop"
+ },
+ "t_akacja": {
+  "file": "sprites2/t_akacja.webp",
+  "fw": 536,
+  "fh": 510,
+  "cols": 1,
+  "px": 2,
+  "ax": 163.85,
+  "ay": 409.35,
+  "n": {
+   "stand": 1
+  },
+  "per": 1,
+  "kind": "prop"
  }
 }

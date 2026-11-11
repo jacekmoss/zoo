@@ -1600,7 +1600,9 @@
   }
   function drawTree(t, i) {
     const w = g2w(t[1], t[2]), p = treeOf(t[0], i), sway = t[0] === 'skala' ? 0 : Math.sin(time * 1.1 + i * 1.7) * 0.03 + Math.sin(time * 2.7 + i) * 0.008;
-    ctx.save(); ctx.translate(w.x, w.y); ctx.scale(t[3] * 0.9, t[3] * 0.9); ctx.transform(1, 0, sway, 1, 0, 0); blit(p, 0, 0); ctx.restore();
+    ctx.save(); ctx.translate(w.x, w.y); ctx.scale(t[3] * 0.9, t[3] * 0.9); ctx.transform(1, 0, sway, 1, 0, 0);
+    if (S2['t_' + t[0]]) s2draw('t_' + t[0], 'stand', 0, i % 2 === 1, i % 3 === 0, 0, 0, 1); else blit(p, 0, 0);
+    ctx.restore();
   }
   function guestDir(g) {
     const n = g.q[0]; if (n) { const d = (n.x - n.y) - (g.x - g.y); if (Math.abs(d) > 0.01) g.dir = d < 0 ? -1 : 1; }
@@ -1808,7 +1810,7 @@
     return wy - Math.max(95, h + 30);
   }
   // Zwierzęta (animals.js): klatki marszu i spoczynku; tempo kroku zależy od prędkości i długości kroku gatunku.
-  const ANIM_K = 0.82;
+  const ANIM_K = 0.9;
   const IDLE_T = { krokodyl: 7, hipopotam: 8, slon: 5, flaming: 6 };
   function drawAnimal(name, a, s, hop) {
     const m = S2[name]; if (!m) return;
@@ -1949,7 +1951,8 @@
     ctx.save(); ctx.translate(w.x, w.y + 8);
     if (j && kind === 'drzewo') ctx.rotate((1 - k) * 1.35);                 // drzewo się przewraca
     const s = (kind === 'skala' ? 0.5 : 0.66) * (kind === 'skala' ? k : Math.min(1, 0.4 + k)); ctx.scale(s, s);
-    blit(p, 0, 0); ctx.restore();
+    if (S2['t_' + name]) s2draw('t_' + name, 'stand', 0, tHash(x + 3, y) > 0.5, tHash(y + 5, x) > 0.5, 0, -6, 1); else blit(p, 0, 0);
+    ctx.restore();
   }
   function drawParks() {
     for (let i = 0; i < COLS; i++) {
@@ -2211,10 +2214,25 @@
   }
   // Karty panelu: najpierw odblokowane zwierzęta, potem kioski, na końcu (wyszarzone) to, co da następna gwiazdka.
   let panelScroll = 0;
+  // Zakładki sklepu: zwierzęta, kioski, atrakcje, pracownicy (z weterynarzem). Obrazek zamiast napisu – dziecko nie czyta.
+  const TABS = [{ k: 'animal', icon: 'lew' }, { k: 'kiosk', icon: 'kiosk_lody' }, { k: 'fun', icon: 'karuzela' }, { k: 'staff', icon: 'opiekun' }];
+  let panelTab = 'animal', panelIn = 0, tabPop = 0;
+  const tabOf = (t) => { const k = TYPES[t].kind; return k === 'vet' ? 'staff' : k; };
+  const TAB_SAY = { animal: 'Zwierzęta.', kiosk: 'Kioski.', fun: 'Atrakcje.', staff: 'Pracownicy.' };
+  function tabRects() {
+    const cb = closeBtn(), h = (PANEL_H - 36 - 70 - 5 * 8) / 4;
+    return TABS.map((t, i) => ({ ...t, x: cb.x, y: UH - PANEL_H + 18 + 70 + 8 + i * (h + 8), w: cb.w, h }));
+  }
+  function openPanel(key) {
+    S.panel = key; panelScroll = 0; panelIn = 0;
+    panelTab = S.wish && unlocked().includes(S.wish) ? tabOf(S.wish) : 'animal';
+  }
+  function setTab(k) { if (k === panelTab) return; panelTab = k; panelScroll = 0; tabPop = 0.25; sfx.tap(); say(TAB_SAY[k]); }
   function panelItems() {
     const un = unlocked();
-    const items = ['wet', ...STAFF.filter((t) => un.includes(t)), ...ANIMALS.filter((t) => un.includes(t)), ...KIOSKS.filter((t) => un.includes(t)), ...FUN.filter((t) => un.includes(t))].map((t) => ({ type: t, locked: false }));
-    nextStarTypes().forEach((t) => items.push({ type: t, locked: true }));
+    const inTab = (t) => tabOf(t) === panelTab;
+    const items = ['wet', ...STAFF.filter((t) => un.includes(t)), ...ANIMALS.filter((t) => un.includes(t)), ...KIOSKS.filter((t) => un.includes(t)), ...FUN.filter((t) => un.includes(t))].filter(inTab).map((t) => ({ type: t, locked: false }));
+    nextStarTypes().filter(inTab).forEach((t) => items.push({ type: t, locked: true }));
     return items;
   }
   function panelCards() {
@@ -2222,7 +2240,7 @@
     return panelItems().map((it, i) => ({ i, ...it, x: STRIP_X + Math.floor(i / 2) * (CARD_W + CARD_GAP) - panelScroll, y: y0 + (i % 2) * (CARD_H + CARD_GAP), w: CARD_W, h: CARD_H }));
   }
   const panelMaxScroll = () => Math.max(0, STRIP_X + Math.ceil(panelItems().length / 2) * (CARD_W + CARD_GAP) - (UW - 20));
-  const closeBtn = () => ({ x: 18, y: UH - PANEL_H + 18, w: 94, h: CARD_H * 2 + CARD_GAP });
+  const closeBtn = () => ({ x: 18, y: UH - PANEL_H + 18, w: 94, h: 70 });
   function drawUI() {
     ctx.setTransform(DPR * u, 0, 0, DPR * u, 0, 0);
     if (S.scene === 'title' && titleOut <= 0) { drawTitle(1); drawSoundBtn(); return; }
@@ -2276,6 +2294,12 @@
   }
   function drawPanel() {
     const y = UH - PANEL_H, R = 26;
+    panelIn = Math.min(1, panelIn + 0.09); tabPop = Math.max(0, tabPop - 0.016);
+    const slide = (1 - easeOut(panelIn)) * PANEL_H;
+    ctx.save(); ctx.translate(0, slide);
+    try { drawPanelBody(y, R); } finally { ctx.restore(); }
+  }
+  function drawPanelBody(y, R) {
     // cień nad panelem i arkusz z zaokrąglonymi górnymi rogami
     { const s2 = ctx.createLinearGradient(0, y - 34, 0, y + 4); s2.addColorStop(0, 'rgba(8,12,6,0)'); s2.addColorStop(1, 'rgba(8,12,6,.38)'); ctx.fillStyle = s2; ctx.fillRect(0, y - 34, UW, 38); }
     const sheet = () => { ctx.beginPath(); ctx.moveTo(0, UH + 2); ctx.lineTo(0, y + R); ctx.arcTo(0, y, R, y, R); ctx.lineTo(UW - R, y); ctx.arcTo(UW, y, UW, y + R, R); ctx.lineTo(UW, UH + 2); ctx.closePath(); };
@@ -2318,12 +2342,23 @@
       const g = ctx.createLinearGradient(STRIP_X - 6, 0, STRIP_X + 84, 0); g.addColorStop(0, 'rgba(26,34,22,.96)'); g.addColorStop(1, 'rgba(26,34,22,0)');
       ctx.fillStyle = g; ctx.fillRect(STRIP_X - 6, y + 2, 90, PANEL_H); arrowBtn(STRIP_X + 34, -1);
     }
-    // zamknij: okrągły przycisk po lewej, oddzielony cienką linią od kart
+    // lewa kolumna: zamknij i zakładki działów
     const cb = closeBtn(), mx = cb.x + cb.w / 2, my = cb.y + cb.h / 2;
     ctx.fillStyle = 'rgba(214,174,82,.18)'; ctx.fillRect(STRIP_X - 12, y + 30, 1.5, PANEL_H - 60);
-    glassCircle(mx, my, 40);
-    ctx.strokeStyle = '#efe7d4'; ctx.lineWidth = 7; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(mx - 14, my - 14); ctx.lineTo(mx + 14, my + 14); ctx.moveTo(mx + 14, my - 14); ctx.lineTo(mx - 14, my + 14); ctx.stroke(); ctx.lineCap = 'butt';
+    glassCircle(mx, my, 31);
+    ctx.strokeStyle = '#efe7d4'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(mx - 11, my - 11); ctx.lineTo(mx + 11, my + 11); ctx.moveTo(mx + 11, my - 11); ctx.lineTo(mx - 11, my + 11); ctx.stroke(); ctx.lineCap = 'butt';
+    const un = unlocked(), nextT = nextStarTypes();
+    tabRects().forEach((r) => {
+      const on = r.k === panelTab, pop = on ? 1 + Math.sin(tabPop / 0.25 * Math.PI) * 0.08 : 1;
+      ctx.save(); ctx.translate(r.x + r.w / 2, r.y + r.h / 2); ctx.scale(pop, pop); ctx.translate(-r.w / 2, -r.h / 2);
+      if (on) { ctx.save(); ctx.shadowColor = 'rgba(240,200,90,.55)'; ctx.shadowBlur = 14; rr(0, 0, r.w, r.h, 14); ctx.fillStyle = '#efe7d4'; ctx.fill(); ctx.restore(); rr(1.5, 1.5, r.w - 3, r.h - 3, 13); ctx.strokeStyle = C.gold; ctx.lineWidth = 3; ctx.stroke(); }
+      else { rr(0, 0, r.w, r.h, 14); ctx.fillStyle = 'rgba(239,231,212,.12)'; ctx.fill(); rr(0.75, 0.75, r.w - 1.5, r.h - 1.5, 14); ctx.strokeStyle = 'rgba(214,174,82,.35)'; ctx.lineWidth = 1.5; ctx.stroke(); }
+      ctx.globalAlpha = on ? 1 : 0.8; sprFit(r.icon, 8, 5, r.w - 16, r.h - 10); ctx.globalAlpha = 1;
+      // złota kropka: w tym dziale jest coś jeszcze nieodkrytego, na co dziecko ma monety
+      if (!on && un.some((t) => tabOf(t) === r.k && !S.found[t] && S.coins >= TYPES[t].price)) { ctx.beginPath(); ctx.arc(r.w - 9, 9, 7, 0, 7); ctx.fillStyle = C.gold; ctx.fill(); ctx.strokeStyle = '#1c2717'; ctx.lineWidth = 2; ctx.stroke(); }
+      ctx.restore();
+    });
   }
   // ---------- album ----------
   const albumHop = {};
@@ -2799,6 +2834,7 @@
     }
     if (S.panel) {
       if (inR(ui, closeBtn())) { sfx.tap(); S.panel = null; return; }
+      { const tb = tabRects().find((r) => inR(ui, r)); if (tb) { setTab(tb.k); return; } }
       for (const c of panelCards()) {
         if (c.x + c.w < STRIP_X - 6) continue;
         if (inR(ui, c)) {
@@ -2836,7 +2872,7 @@
         const key = placeKey(pk, q);
         if (S.builds[key]) tapBuilding(key);
         else if (quadBlocked(key)) { quadTiles(key).forEach(([x, y]) => orderClear(tkey(x, y))); }
-        else { sfx.tap(); S.panel = key; panelScroll = 0; say('Wybierz, co tu postawić.'); }
+        else { sfx.tap(); openPanel(key); say('Wybierz, co tu postawić.'); }
       }
       return;
     }
@@ -2924,6 +2960,7 @@
     placeScreen(k) { const c = placeCenter(k), w = g2w(c.x, c.y); return w2s(w.x, w.y); },
     signScreen(k) { const p = signPos(k); return w2s(p.x, p.y - 70); },
     cardScreen(type) {    // przewija pasek kart tak, żeby karta była widoczna
+      if (TYPES[type]) panelTab = tabOf(type);
       const items = panelItems(), i = items.findIndex((x) => x.type === type); if (i < 0) return null;
       const cx = STRIP_X + Math.floor(i / 2) * (CARD_W + CARD_GAP);
       if (cx - panelScroll + CARD_W > UW - 100 || cx - panelScroll < STRIP_X) panelScroll = clamp(cx - STRIP_X, 0, panelMaxScroll());
