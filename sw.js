@@ -337,6 +337,6 @@ self.addEventListener('fetch', (e) => {
   if (url.origin !== self.location.origin) return;
   e.respondWith(caches.open(CACHE).then((c) => c.match(req, { ignoreSearch: true }).then((hit) => {
     if (hit) return hit;
-    return fetch(req).then((res) => { if (res.ok) c.put(req, res.clone()); return res; }).catch(() => c.match('./index.html'));
+    return fetch(req).then((res) => { if (res.ok) c.put(req, res.clone()); return res; }).catch(() => req.mode === 'navigate' ? c.match('./index.html') : Response.error());
   })));
 });
