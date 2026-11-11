@@ -681,7 +681,7 @@
     return list[j] || (list[j] = s.fr(walk ? j : s.m.walk + j));   // klatkę wycinamy dopiero przy pierwszym użyciu (mniej pamięci)
   }
   const ready = OFF3D || !window.ZOO_3D ? Promise.resolve() : Promise.all(Object.entries(window.ZOO_3D).map(async ([type, d]) => {
-    if (d.animal && A[type]) {
+    if (d.animal && A[type] && !(window.ZOO_S2 && window.ZOO_S2[type])) {   // zwierzęta mają już klatki z Blendera (sprites2)
       const m = d.animal, im = await loadImg(m.file); if (!im) return;
       const fr = (n) => { const c = cut(im, (n % m.cols) * m.fw, Math.floor(n / m.cols) * m.fh, m.fw, m.fh); return { c, x: -m.ax / m.px, y: -m.ay / m.px, w: m.fw / m.px, h: m.fh / m.px }; };
       SH[type] = { m, fr, walk: new Array(m.walk).fill(null), idle: new Array(m.idle).fill(null) };

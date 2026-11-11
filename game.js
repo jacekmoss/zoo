@@ -97,8 +97,10 @@
   const ctx2d = canvas.getContext('2d');
   // Świat rysuje karta graficzna (gl2d.js) na osobnym płótnie pod spodem; napisy i interfejs zostają na płótnie 2D.
   // „ctx” wskazuje na to, po czym akurat rysujemy: G w czasie rysowania świata, ctx2d poza nim.
+  // Tablet (mały ekran albo mało pamięci): tekstury w połowie rozdzielczości – 4× mniej pamięci, a przy tej wielkości ekranu różnicy prawie nie widać.
+  const LOW_MEM = /[?&]lekko/.test(location.search) || (navigator.deviceMemory || 8) <= 4 || Math.max(screen.width, screen.height) * (window.devicePixelRatio || 1) <= 1400;
   const wcanvas = document.getElementById('world');
-  const G = (window.ZooGL && !/[?&]bezgl/.test(location.search) && window.ZooGL.create(wcanvas, { texScale: (navigator.deviceMemory || 8) <= 2 ? 0.5 : 1 })) || null;
+  const G = (window.ZooGL && !/[?&]bezgl/.test(location.search) && window.ZooGL.create(wcanvas, { texScale: LOW_MEM ? 0.5 : 1 })) || null;
   let ctx = ctx2d;
   // DPR_CAP: gdy klatki są wolne (słabszy tablet), gra sama obniża rozdzielczość rysowania (zob. frame).
   let DPR_CAP = 2, slowT = 0;
@@ -142,25 +144,19 @@
   function loadSprites() {
     const art = window.ZOO_ART, ZA = window.ZOO_ANIMALS;
     // zwierzęta: portret (klatka spoczynku) w wysokiej rozdzielczości – karty, album, dymki
-    ZA.list.forEach((t) => {
-      const [x0, y0, x1, y1] = ZA.A[t].box, k = Math.min(6, 420 / Math.max(x1 - x0, y1 - y0));
-      let f = ZA.render(t, 'idle', 0, k);
-      // przycięcie do widocznych pikseli: w kartach i albumie zwierzę wypełnia miejsce
-      if (!window.ZOO_ANIMALS.A[t] || !window.ZOO_3D || !window.ZOO_3D[t] || !window.ZOO_3D[t].animal || /[?&]stary/.test(location.search)) try { const d = f.c.getContext('2d').getImageData(0, 0, f.c.width, f.c.height).data, W = f.c.width, H = f.c.height;
-        let a = W, b2 = H, c = -1, e = -1;
-        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (d[(y * W + x) * 4 + 3] > 8) { if (x < a) a = x; if (x > c) c = x; if (y < b2) b2 = y; if (y > e) e = y; }
-        if (c >= a) { const n = document.createElement('canvas'); n.width = c - a + 1; n.height = e - b2 + 1; n.getContext('2d').drawImage(f.c, -a, -b2);
-          f = { c: n, x: f.x + a / k, y: f.y + b2 / k, w: n.width / k, h: n.height / k }; } } catch (err) { /* plik z dysku: bez przycinania */ }
-      SPR[t] = f;
-      const sc = document.createElement('canvas'); sc.width = f.c.width; sc.height = f.c.height;
-      const g = sc.getContext('2d'); g.drawImage(f.c, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = '#1c2618'; g.fillRect(0, 0, sc.width, sc.height);
-      SIL[t] = { c: sc, x: f.x, y: f.y, w: f.w, h: f.h };
-    });
+    const sil = (c, w, h) => { const sc = document.createElement('canvas'); sc.width = w; sc.height = h; const g = sc.getContext('2d'); g.drawImage(c, 0, 0, w, h); g.globalCompositeOperation = 'source-in'; g.fillStyle = '#1c2618'; g.fillRect(0, 0, w, h); return sc; };
+    // zwierzęta: portret z boku (karty, album, dymki)
+    const portraits = ZA.list.map((t) => new Promise((resolve) => {
+      const P = S2['p_' + t]; if (!P) return resolve();
+      const im = new Image();
+      im.onload = () => { const [x0, y0, x1, y1] = ZA.A[t].box, f = { c: im, x: x0, y: y0, w: x1 - x0, h: y1 - y0 }; SPR[t] = f; SIL[t] = { c: sil(im, P.w, P.h), x: f.x, y: f.y, w: f.w, h: f.h }; resolve(); };
+      im.onerror = () => resolve(); im.src = P.file;
+    }));
     const drawn = (name, vt) => { SPR[name] = vt; const sc = document.createElement('canvas'); sc.width = vt.c.width; sc.height = vt.c.height; const g = sc.getContext('2d'); g.drawImage(vt.c, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = '#1c2618'; g.fillRect(0, 0, sc.width, sc.height); SIL[name] = { c: sc, x: vt.x, y: vt.y, w: vt.w, h: vt.h }; };
     drawn('wet', window.ZOO_LOOK.makeVet());
     STAFF.forEach((t) => drawn(t, window.ZOO_LOOK.makeHouse(t)));
     FUN.forEach((t) => drawn(t, window.ZOO_LOOK.makeFun(t)));
-    return Promise.all(Object.keys(art).map((name) => new Promise((resolve) => {
+    return Promise.all(portraits.concat(Object.keys(art).map((name) => new Promise((resolve) => {
       const a = art[name], [x, y, w, h] = a.vb, res = Math.min(3.2, (a.res || 1) * 1.8);   // wyższa rozdzielczość: ostro także w zbliżeniu
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w * res}" height="${h * res}" viewBox="${x} ${y} ${w} ${h}">${a.svg}</svg>`;
       const img = new Image();
@@ -177,7 +173,7 @@
       };
       img.onerror = () => { console.error('Nie wczytano obrazka', name); resolve(); };
       img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-    })));
+    }))));
   }
   // Bryłowość płaskich obrazków: światło z lewej góry, cień z prawej i u dołu (tylko na pikselach obrazka).
   const FLAT = new Set(['moneta', 'dlon', 'miska', 'skrzynka', 'smiec']);
@@ -216,6 +212,45 @@
     ctx.drawImage(p.c, bx + (bw - w) / 2, by + (bh - h) / 2, w, h);
   }
   const LOOK = window.ZOO_LOOK;
+  // ---------- klatki z Blendera (sprites2/index.js): zwierzęta, ludzie, pojazdy ----------
+  // Każdy arkusz to jeden obrazek: kierunek „f” (idzie w prawo i w dół ekranu), potem „b” (w prawo i w górę);
+  // pozostałe dwa kierunki to odbicia lustrzane. Obrazki wczytują się dopiero, gdy są potrzebne (pamięć tabletu).
+  const S2 = window.ZOO_S2 || {}, S2IMG = {};
+  function s2img(name) {
+    let e = S2IMG[name];
+    if (!e) { e = S2IMG[name] = { im: null }; const im = new Image(); im.onload = () => { e.im = im; }; im.onerror = () => console.error('Nie wczytano', name); im.src = S2[name].file; }
+    return e.im;
+  }
+  const S2_KINDS = ['walk', 'idle', 'eat', 'stand'];
+  function s2draw(name, kind, i, back, flip, x, y, s = 1) {
+    const m = S2[name]; if (!m) return false;
+    const im = s2img(name); if (!im) return true;
+    let off = 0; for (const k of S2_KINDS) { if (k === kind) break; off += m.n[k] || 0; }
+    const cnt = m.n[kind] || 1, n = (back ? m.per : 0) + off + ((i % cnt) + cnt) % cnt, sx = (n % m.cols) * m.fw, sy = Math.floor(n / m.cols) * m.fh, k = s / m.px;
+    ctx.save(); ctx.translate(x, y); if (flip) ctx.scale(-1, 1);
+    ctx.drawImage(im, sx + 0.5, sy + 0.5, m.fw - 1, m.fh - 1, -m.ax * k, -m.ay * k, m.fw * k, m.fh * k);
+    ctx.restore(); return true;
+  }
+  // Kierunek z ruchu po siatce: +x = prawo-dół, −x = lewo-góra, +y = lewo-dół, −y = prawo-góra.
+  function dir4(dx, dy, o) {
+    if (Math.abs(dx) < 1e-4 && Math.abs(dy) < 1e-4) return o;
+    if (Math.abs(dx) >= Math.abs(dy)) { o.back = dx < 0; o.flip = dx < 0; } else { o.back = dy < 0; o.flip = dy > 0; }
+    return o;
+  }
+  const dir4s = (sx, sy, o) => dir4(sx / 2 + sy, sy - sx / 2, o);       // to samo dla ruchu podanego w pikselach ekranu
+  const PEOPLE_M = ['os_mezczyzna', 'os_kobieta', 'os_chlopiec', 'os_dziewczynka', 'os_babcia', 'os_mezczyzna', 'os_kobieta'];
+  const TINTS = [null, [0.9, 0.97, 1.1], [1.1, 0.97, 0.88], [0.95, 1.06, 0.92], [1.05, 0.9, 1.02]];
+  // Postać: model, punkt stóp, czy idzie, faza kroku, kierunek {back, flip}, skala, odcień ubrania.
+  function drawHuman(model, x, y, walking, phase, d, s = 1, tint = null) {
+    if (!S2[model]) return false;
+    if (ctx.isGL) ctx.tint = tint;
+    const m = S2[model], i = walking ? Math.floor((((phase / 6.2832) % 1) + 1) % 1 * m.n.walk) : 0;
+    s2draw(model, walking ? 'walk' : 'stand', i, d && d.back, d && d.flip, x, y, s);
+    if (ctx.isGL) ctx.tint = null;
+    return true;
+  }
+  const personOf = (look) => PEOPLE_M[((look % 7) + 7) % 7];
+  const DSTAND = { back: false, flip: false }, DSTAND_L = { back: false, flip: true };
   let PAT = {}, PAT2D = {}, MOTTLE = null, VIGN = null, PATIO = null, CLOUD = null;
   const ENC = {}, TREE_C = {};
   const encOf = (b) => ENC[b] || (ENC[b] = LOOK.makeEnclosure(b));
@@ -612,6 +647,7 @@
   const HOPPERS = { krolik: [9, 0.3], kangur: [18, 0.45] };          // kicanie w marszu: [wysokość, czas]
   const JUMPERS = { malpa: [30, 0.6], koala: [8, 0.5], pingwin: [6, 0.3] };   // podskok w miejscu od czasu do czasu
   const BOWL = { x: -34, y: 30 };
+  const SPEED = { zolw: 5, krokodyl: 7, hipopotam: 9, slon: 10, koala: 7, pingwin: 9, krolik: 16, zebra: 14, tygrys: 14, lew: 13 };   // tempo chodu (jednostki/s)
   const inPool = (pool, x, y, m = 0.75) => pool && ((x - pool.x) / pool.rx) ** 2 + ((y - pool.y) / pool.ry) ** 2 < m;
   function makeRT(key) {
     const t = TYPES[S.builds[key].type];
@@ -1124,7 +1160,7 @@
     const c = placeCenter(k);
     [[1.25, 0.2], [1.3, -0.5], [0.2, 1.3], [-0.5, 1.25], [1.15, 0.85]].forEach(([dx, dy], i) => {
       const w = g2w(c.x + dx, c.y + dy), jump = Math.abs(Math.sin(time * 6 + i)) * 6;
-      LOOK.drawPerson(ctx, w.x, w.y - jump, i + 2, time * 9, false, i % 2 ? -1 : 1, 1.05);
+      if (!drawHuman(personOf(i + 2), w.x, w.y - jump, false, 0, { back: true, flip: i % 2 === 0 }, 1, TINTS[i % TINTS.length])) LOOK.drawPerson(ctx, w.x, w.y - jump, i + 2, time * 9, false, i % 2 ? -1 : 1, 1.05);
     });
   }
 
@@ -1472,13 +1508,17 @@
         if (a.wait > 0) {
           a.wait -= dt;
           const J = JUMPERS[type]; if (J && !wet && a.jump <= 0 && Math.random() < dt * 0.3) { a.jump = J[1]; a.jumpDur = J[1]; a.jumpH = J[0]; }
-          if (a.wait <= 0) { const m = rt.animals[0], p = a.baby && m && !m.gone ? { x: m.tx + rand(-20, 20), y: m.ty + rand(4, 12) } : spotFor(type); a.tx = p.x; a.ty = p.y; a.flip = p.x > a.x; }
+          if (a.wait <= 0) { const m = rt.animals[0], p = a.baby && m && !m.gone ? { x: m.tx + rand(-20, 20), y: m.ty + rand(4, 12) } : spotFor(type); a.tx = p.x; a.ty = p.y; a.graze = 0;
+            const ddx = p.x - a.x, ddy = p.y - a.y, ka = (ddx / 2 + ddy) / 2, kb = (ddy - ddx / 2) / 2; a.via = Math.random() < 0.5 ? { x: a.x + 2 * ka, y: a.y + ka } : { x: a.x - 2 * kb, y: a.y + kb }; }
           return;
         }
-        const dx = a.tx - a.x, dy = a.ty - a.y, d = Math.hypot(dx, dy), v = (a.fast ? 34 : 12) * dt;
-        a.step += (a.fast ? 34 : 12) * dt / (window.ZOO_ANIMALS.A[type].stride || window.ZOO_ANIMALS.A[type].h * 0.36 + 6) * Math.PI * 2;
+        // idzie po przekątnych (jak ustawione są klatki): najpierw do punktu pośredniego, potem do celu
+        const tg = a.via || { x: a.tx, y: a.ty }, dx = tg.x - a.x, dy = tg.y - a.y, d = Math.hypot(dx, dy), v = (a.fast ? 34 : SPEED[type] || 12) * dt * (a.baby ? 0.8 : 1);
+        if (d > 0.5) dir4s(dx, dy, a);
+        a.step += v / ((S2[type] && S2[type].stride ? S2[type].stride * (a.baby ? 0.55 : 1) : 0) || window.ZOO_ANIMALS.A[type].stride || window.ZOO_ANIMALS.A[type].h * 0.36 + 6) * Math.PI * 2;
+        if (a.via && d <= v) { a.x = tg.x; a.y = tg.y; a.via = null; return; }
         const H = HOPPERS[type]; if (H && a.jump <= 0 && !wet) { a.jump = H[1]; a.jumpDur = H[1]; a.jumpH = H[0]; }
-        if (d <= v) { a.x = a.tx; a.y = a.ty; a.wait = a.fast ? rand(3, 5) : wet && type === 'pingwin' ? rand(1.2, 2.5) : rand(2, 6); a.fast = 0; } else { a.x += dx / d * v; a.y += dy / d * v; }
+        if (d <= v) { a.x = a.tx; a.y = a.ty; a.wait = a.fast ? rand(3, 5) : wet && type === 'pingwin' ? rand(1.2, 2.5) : rand(2, 6); a.fast = 0; a.graze = Math.random() < 0.4 ? 1 : 0; } else { a.x += dx / d * v; a.y += dy / d * v; }
       });
     });
     spawnTimer -= dt;
@@ -1658,10 +1698,10 @@
       if (w.x < a.x - 110 || w.x > b.x + 110 || w.y < a.y - 30 || w.y > b.y + 170) return;
       objs.push({ d: x + y + 1, f: () => drawObstacleTree(tk, kind, x, y, w) });
     });
-    Object.keys(S.clear).forEach((tk) => { const [x, y] = tk.split(',').map(Number), w = g2w(x + 0.5, y + 0.5); objs.push({ d: x + y + 1.05, f: () => LOOK.drawWorker(ctx, w.x - 40, w.y + 8, time * 9 + x, 1, 1) }); });
-    Object.keys(S.bins).forEach((tk) => { const [x, y] = tk.split(',').map(Number), w = g2w(x + 0.28, y + 0.28), rem = S.bins[tk]; objs.push({ d: x + y + 0.6, f: () => { if (rem > 0) LOOK.drawWorker(ctx, w.x - 26, w.y + 6, time * 9, 1, 0.9); LOOK.drawBin(ctx, w.x, w.y, 1 - 0.6 * rem / BIN_T); } }); });
+    Object.keys(S.clear).forEach((tk) => { const [x, y] = tk.split(',').map(Number), w = g2w(x + 0.5, y + 0.5); objs.push({ d: x + y + 1.05, f: () => drawWorkerS(w.x - 40, w.y + 8, time * 9 + x, 1, 1) }); });
+    Object.keys(S.bins).forEach((tk) => { const [x, y] = tk.split(',').map(Number), w = g2w(x + 0.28, y + 0.28), rem = S.bins[tk]; objs.push({ d: x + y + 0.6, f: () => { if (rem > 0) drawWorkerS(w.x - 26, w.y + 6, time * 9, 1, 0.9); LOOK.drawBin(ctx, w.x, w.y, 1 - 0.6 * rem / BIN_T); } }); });
     S.cars.forEach((c) => objs.push({ d: c.x + c.y, f: () => drawVehicle(c, c.kind || '', c.col) }));
-    Object.values(CREW).forEach((c) => objs.push({ d: c.x + c.y, f: () => { const w = g2w(c.x, c.y); LOOK.drawStaff(ctx, w.x, w.y, c.kind, c.phase, c.q.length > 0 && c.wait <= 0, c.dir || 1, 1.1); } }));
+    Object.values(CREW).forEach((c) => objs.push({ d: c.x + c.y, f: () => { const w = g2w(c.x, c.y), n0 = c.q[0]; if (n0) dir4(n0.x - c.x, n0.y - c.y, c); if (!drawHuman('os_' + c.kind, w.x, w.y, c.q.length > 0 && c.wait <= 0, c.phase * 0.8, c, 1)) LOOK.drawStaff(ctx, w.x, w.y, c.kind, c.phase, c.q.length > 0 && c.wait <= 0, c.dir || 1, 1.1); } }));
     if (S.esc) { const e = S.esc; objs.push({ d: e.gx + e.gy, f: () => { const w = g2w(e.gx, e.gy); ctx.save(); ctx.translate(w.x, w.y); drawAnimal(e.type, { x: 0, y: 0, wait: e.wait > 0 || !e.q.length ? 1 : 0, step: e.step, seed: 1, sink: 0, jump: 0, flip: e.flip }, ANIM_K * 0.8, 0); ctx.restore(); } }); }
     if (S.show && S.show.on) { const k = S.show.k, c = placeCenter(k); objs.push({ d: c.x + c.y + 1.4, f: () => drawCrowd(k) }); }
     S.veh.forEach((v) => objs.push({ d: v.x + v.y + 0.2, f: () => drawVehicle(v, v.kind, '#fff') }));
@@ -1669,14 +1709,16 @@
     Object.keys(S.builds).forEach((k) => { const c = placeCenter(k); objs.push({ d: c.x + c.y, f: () => drawBuilding(k, c) }); });
     S.guests.forEach((g) => objs.push({ d: g.x + g.y, f: () => {
       const w = g2w(g.x, g.y), walking = g.q.length && g.wait <= 0;
-      ctx.globalAlpha = g.fade; LOOK.drawPerson(ctx, w.x, w.y, g.look != null ? g.look : g.id % 7, g.phase, walking, guestDir(g), 1.1);
+      const n0 = g.q[0]; if (n0) dir4(n0.x - g.x, n0.y - g.y, g);
+      ctx.globalAlpha = g.fade; const lk = g.look != null ? g.look : g.id % 7;
+      if (!drawHuman(personOf(lk), w.x, w.y, walking, g.phase * 0.8, g, 1, TINTS[g.id % TINTS.length])) LOOK.drawPerson(ctx, w.x, w.y, lk, g.phase, walking, guestDir(g), 1.1);
       if (S.rain > 0) LOOK.drawUmbrella(ctx, w.x, w.y, CAR_COLS[g.id % CAR_COLS.length], 1.1);
       ctx.globalAlpha = 1;
     } }));
-    if (!S.connected.length && S.plots.size) WAITING.forEach((p, i) => objs.push({ d: p[0] + p[1], f: () => { const w = g2w(p[0], p[1]); LOOK.drawPerson(ctx, w.x, w.y, i + 1, 0, false, i % 2 ? 1 : -1, 1.1); } }));
+    if (!S.connected.length && S.plots.size) WAITING.forEach((p, i) => objs.push({ d: p[0] + p[1], f: () => { const w = g2w(p[0], p[1]); if (!drawHuman(personOf(i + 1), w.x, w.y, false, 0, i % 2 ? DSTAND : DSTAND_L, 1)) LOOK.drawPerson(ctx, w.x, w.y, i + 1, 0, false, i % 2 ? 1 : -1, 1.1); } }));
     if (S.wish || wishJoy > 0) objs.push({ d: WISH_POS.x + WISH_POS.y, f: () => {
       const w = g2w(WISH_POS.x, WISH_POS.y), jump = wishJoy > 0 ? Math.abs(Math.sin(wishJoy * 10)) * 14 : 0;
-      LOOK.drawPerson(ctx, w.x, w.y - jump, 6, 0, false, -1, 1.3);
+      if (!drawHuman('os_kobieta', w.x, w.y - jump, false, 0, DSTAND_L, 1.15)) LOOK.drawPerson(ctx, w.x, w.y - jump, 6, 0, false, -1, 1.3);
     } });
     objs.sort((p, q) => p.d - q.d).forEach((o) => o.f());
     // plusk wody
@@ -1762,36 +1804,30 @@
   function bubbleY(k, wy) {
     const t = S.builds[k].type, T = TYPES[t];
     if (T.kind !== 'animal') return wy - 150;
-    const h = window.ZOO_ANIMALS.A[t].h * ANIM_K;
+    const h = (S2[t] ? S2[t].h * 0.9 : window.ZOO_ANIMALS.A[t].h) * ANIM_K;
     return wy - Math.max(95, h + 30);
   }
   // Zwierzęta (animals.js): klatki marszu i spoczynku; tempo kroku zależy od prędkości i długości kroku gatunku.
-  const ANIM_K = 1;
+  const ANIM_K = 0.82;
   const IDLE_T = { krokodyl: 7, hipopotam: 8, slon: 5, flaming: 6 };
   function drawAnimal(name, a, s, hop) {
-    const ZA = window.ZOO_ANIMALS, def = ZA.A[name]; if (!def) return;
+    const m = S2[name]; if (!m) return;
     const moving = a.wait <= 0;
     let lift = hop;
     if (a.jump > 0 && a.jumpDur) lift += Math.sin(Math.PI * (1 - a.jump / a.jumpDur)) * a.jumpH;
-    let mode = 'idle', idx;
-    if (HOPPERS[name] && moving) { mode = 'walk'; idx = a.jump > 0 && a.jumpDur ? Math.floor((1 - a.jump / a.jumpDur) * ZA.WALK_N) : 0; }
-    else if (moving) { mode = 'walk'; idx = Math.floor(((a.step / (Math.PI * 2)) % 1) * ZA.WALK_N); }
-    else idx = Math.floor((((time + a.seed * 3) / (IDLE_T[name] || 4)) % 1) * ZA.IDLE_N);
-    idx = clamp(idx, 0, (mode === 'walk' ? ZA.WALK_N : ZA.IDLE_N) - 1);
-    const m = ctx.getTransform(), f = ZA.frame(name, mode, idx, Math.hypot(m.a, m.b) * s);
-    const breathe = moving ? 1 : 1 + 0.012 * Math.sin(time * 2.2 + a.seed);
-    const depth = a.sink * def.h * s * 0.9;
-    if (a.sink < 0.08) {             // cień na ziemi
-      const rx = (def.box[2] - def.box[0]) * s * 0.3, sh = 1 / (1 + lift * 0.04);
-      ctx.fillStyle = 'rgba(22,30,12,.26)'; ctx.beginPath(); ctx.ellipse(a.x, a.y + 1, rx * sh, rx * 0.26 * sh, 0, 0, 7); ctx.fill();
-    }
+    let mode = 'idle', idx = 0;
+    if (HOPPERS[name] && moving) { mode = 'walk'; idx = a.jump > 0 && a.jumpDur ? Math.floor((1 - a.jump / a.jumpDur) * m.n.walk) : 0; }
+    else if (moving) { mode = 'walk'; idx = Math.floor((((a.step / (Math.PI * 2)) % 1) + 1) % 1 * m.n.walk); }
+    else if (a.sleep) idx = 0;
+    else if (a.eat || a.graze) { mode = 'eat'; idx = Math.floor((((time + a.seed) / 3.2) % 1) * m.n.eat); }
+    else idx = Math.floor((((time + a.seed * 3) / (IDLE_T[name] || 4)) % 1) * m.n.idle);
+    const depth = a.sink * m.h * s * 0.9;
     ctx.save(); ctx.translate(a.x, a.y);
     if (a.sink > 0.01) { ctx.beginPath(); ctx.rect(-500, -700, 1000, 700); ctx.clip(); }
-    ctx.translate(0, depth - lift); ctx.scale(a.flip ? -1 : 1, breathe);
-    ctx.drawImage(mip(f, s), f.x * s, f.y * s, f.w * s, f.h * s);      // mipmapa: duże klatki 3D bez skalowania w każdej klatce
+    s2draw(name, mode, idx, a.back, a.flip, 0, depth - lift, s);
     ctx.restore();
     if (a.sink > 0.06) {
-      const rx = (def.box[2] - def.box[0]) * s * 0.22 * (1 + 0.06 * Math.sin(time * 3 + a.seed));
+      const rx = m.fw / m.px * s * 0.2 * (1 + 0.06 * Math.sin(time * 3 + a.seed));
       ctx.strokeStyle = 'rgba(240,250,255,.55)'; ctx.lineWidth = 1.6;
       ctx.beginPath(); ctx.ellipse(a.x, a.y - 1, rx, rx * 0.3, 0, 0, 7); ctx.stroke();
     }
@@ -1829,7 +1865,8 @@
       }
       const hop = rt.hop > 0 ? Math.abs(Math.sin(rt.hop * 12)) * 10 : 0;
       drawUpgrades(b);
-      if (!away(b)) rt.animals.filter((a) => !a.gone).sort((p, q) => p.y - q.y).forEach((a) => drawAnimal(b.type, a, ANIM_K * (a.baby ? 0.55 : 1), hop * (a.baby ? 0.6 : 1)));
+      const asleep = nightK() > 0.6 && !(S.show && S.show.k === k);
+      if (!away(b)) rt.animals.filter((a) => !a.gone).sort((p, q) => p.y - q.y).forEach((a) => { a.sleep = asleep; a.eat = rt.fed > 0 && !b.h; drawAnimal(b.type, a, ANIM_K * (a.baby ? 0.55 : 1), hop * (a.baby ? 0.6 : 1)); });
       blit(E.front, 0, 0);
       if (nightK() > 0.6 && !away(b)) { ctx.globalAlpha = Math.min(1, (nightK() - 0.6) * 3); [0, 1, 2].forEach((i) => { const k = (time * 0.4 + i / 3) % 1; ctx.globalAlpha *= 1; txt('z', 30 + k * 26 + i * 4, -60 - k * 40, 18 + i * 5, `rgba(240,236,220,${(1 - k) * 0.9})`); }); ctx.globalAlpha = 1; }
     }
@@ -1926,7 +1963,7 @@
           ctx.strokeStyle = 'rgba(236,228,206,.85)'; ctx.lineWidth = 3;
           for (let j = 0; j <= 4; j++) { const lx = x0 + 0.17 + j * 1.17, a0 = g2w(lx, PY + 0.15), b0 = g2w(lx, PY + 1.25), a1 = g2w(lx, PY + 1.75), b1 = g2w(lx, PY + 2.85); ctx.beginPath(); ctx.moveTo(a0.x, a0.y); ctx.lineTo(b0.x, b0.y); ctx.moveTo(a1.x, a1.y); ctx.lineTo(b1.x, b1.y); ctx.stroke(); }
         } else {
-          const w = g2w(x0 + PLOT * k, PY + 1.5); LOOK.drawWorker(ctx, w.x, w.y + 6, time * 9, -1, 1.1);
+          const w = g2w(x0 + PLOT * k, PY + 1.5); drawWorkerS(w.x, w.y + 6, time * 9, -1, 1.1);
           if (Math.random() < 0.3) dust.push({ wx: w.x + rand(-30, 30), wy: w.y + rand(-18, 18), t: 0 });
           const c0 = g2w(x0 + 2.5, PY + 1.5); progressBar(c0.x, c0.y - 74, k);
         }
@@ -1941,7 +1978,21 @@
     const w = 120, h = 16; rr(x - w / 2, y - h / 2, w, h, 8); ctx.fillStyle = 'rgba(20,26,16,.8)'; ctx.fill();
     if (k > 0.02) { rr(x - w / 2 + 3, y - h / 2 + 3, (w - 6) * clamp(k, 0, 1), h - 6, 5); ctx.fillStyle = C.gold; ctx.fill(); }
   }
+  // Robotnik: stoi i „pracuje” (lekko się kiwa); dir: 1 = w prawo, −1 = w lewo.
+  function drawWorkerS(x, y, phase, dir, scale = 1) {
+    const bob = Math.abs(Math.sin(phase)) * 2.5;
+    if (!drawHuman('os_robotnik', x, y - bob, false, 0, dir > 0 ? DSTAND : DSTAND_L, scale * 0.95)) LOOK.drawWorker(ctx, x, y, phase, dir, scale);
+  }
+  const CAR_MODEL = { bus: 'auto_autobus', amb: 'auto_karetka', pol: 'auto_radiowoz' };
   function drawVehicle(v, kind, col) {
+    const model = CAR_MODEL[kind] || (col === CAR_COLS[0] || col === CAR_COLS[5] ? 'auto_suv' : 'auto_osobowe');
+    if (S2[model]) {
+      const w0 = g2w(v.x, v.y); dir4(v.dx || 0, v.dy || 0, v);
+      if (ctx.isGL && model === 'auto_osobowe' && col && col[0] === '#') { const r = parseInt(col.slice(1, 3), 16) / 255, g = parseInt(col.slice(3, 5), 16) / 255, b = parseInt(col.slice(5, 7), 16) / 255; ctx.tint = [0.35 + r * 0.85, 0.35 + g * 0.85, 0.35 + b * 0.85]; }
+      s2draw(model, 'stand', 0, v.back, v.flip, w0.x, w0.y, 1);
+      if (ctx.isGL) ctx.tint = null;
+      return;
+    }
     const w = g2w(v.x, v.y), alongX = Math.abs(v.dx) >= Math.abs(v.dy);
     LOOK.drawCar(ctx, w.x, w.y, col, alongX ? v.dx < 0 : v.dy > 0, alongX ? 1 : -1, kind, time);
   }
@@ -1966,7 +2017,7 @@
       ctx.strokeStyle = '#c7a06a'; ctx.lineWidth = 3;
       for (let l = 30; l < h; l += 34) { ctx.beginPath(); ctx.moveTo(-74, 22 - l); ctx.lineTo(0, 52 - l); ctx.lineTo(74, 22 - l); ctx.stroke(); }
     }
-    LOOK.drawWorker(ctx, -56, 30, time * 9, 1, 1.1); LOOK.drawWorker(ctx, 52, 34, time * 8 + 2, -1, 1.1);
+    drawWorkerS(-56, 30, time * 9, 1, 1.1); drawWorkerS(52, 34, time * 8 + 2, -1, 1.1);
     ctx.restore();
   }
   function bubble(x, y, r = 32) {
@@ -2455,7 +2506,9 @@
   // ---------- ekran startowy ----------
   // Sawanna o złotej godzinie: niebo, wzgórza i akacje (gotowe tło), przez trawę idzie korowód zwierząt, nad nimi znak i duży przycisk.
   let TBG = null, TFG = null, titleOut = 0;
-  const PARADE = ['slon', 'zyrafa', 'zebra', 'lew', 'nosorozec', 'wielblad', 'flaming'], PARADE_S = 1.7, PARADE_V = 15;
+  const PARADE_S = 1.7;
+  // [zwierzę, x (ułamek szerokości), przesunięcie y, odbicie, tyłem, skala]
+  const HERD = [['zyrafa', 0.845, -34, true, false, 1], ['slon', 0.63, -6, true, false, 1], ['zebra', 0.93, 22, true, false, 1], ['lew', 0.12, 4, false, false, 1], ['flaming', 0.26, 30, false, false, 1]];
   const playBtn = () => ({ x: UW / 2, y: UH * 0.47, r: 86 });
   
   function seeded(n) { let s = n; return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }; }
@@ -2539,21 +2592,12 @@
       ctx.beginPath(); ctx.moveTo(x - 10 * k, y - f); ctx.quadraticCurveTo(x - 4 * k, y - 4 * k - f * 0.5, x, y); ctx.quadraticCurveTo(x + 4 * k, y - 4 * k - f * 0.5, x + 10 * k, y - f); ctx.stroke();
     });
     ctx.lineCap = 'butt';
-    // korowód zwierząt (idą w lewo)
-    const ZA = window.ZOO_ANIMALS, s = PARADE_S, gy = UH - 58;
-    if (ZA) {
-      const widths = PARADE.map((t) => (ZA.A[t].box[2] - ZA.A[t].box[0]) * s + 90), L = Math.max(widths.reduce((a, b) => a + b, 0), UW + 700);
-      let off = 0;
-      PARADE.forEach((t, i) => {
-        const def = ZA.A[t], dist = time * PARADE_V;
-        let x = UW * 0.62 + off - ((dist * s) % L); if (x < -400) x += L;
-        off += widths[i];
-        if (x < -400 || x > UW + 400) return;
-        const stride = def.stride || def.h * 0.36 + 6, idx = Math.floor(((dist / stride) % 1) * ZA.WALK_N) % ZA.WALK_N;
-        const f = ZA.frame(t, 'walk', idx, DPR * u * s);
-        const rx = (def.box[2] - def.box[0]) * s * 0.32;
-        ctx.fillStyle = 'rgba(20,26,10,.3)'; ctx.beginPath(); ctx.ellipse(x, gy + 2, rx, rx * 0.16, 0, 0, 7); ctx.fill();
-        ctx.drawImage(mip(f, s), x + f.x * s, gy + f.y * s, f.w * s, f.h * s);
+    // stado na trawie: zwierzęta stoją, rozglądają się i skubią trawę (te same klatki co w grze)
+    { const gy = UH - 64;
+      HERD.forEach(([t, fx, dy, flip, back, k], i) => {
+        const m = S2[t]; if (!m) return;
+        const ph = (time + i * 3.7) % 16, eat = ph > 10, n = eat ? Math.floor((ph - 10) / 6 * m.n.eat * 2) % m.n.eat : Math.floor((time + i) / 0.55) % m.n.idle;
+        s2draw(t, eat ? 'eat' : 'idle', n, back, flip, UW * fx, gy + dy, PARADE_S * k);
       });
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(TFG, 0, 0); ctx.setTransform(DPR * u, 0, 0, DPR * u, 0, 0);

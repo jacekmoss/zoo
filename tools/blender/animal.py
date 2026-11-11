@@ -79,19 +79,30 @@ def slice_mean(mask, z, dz=0.03):
 hipZ = legTop + O.get('hipUp', 0.05)
 # nogi jako spójne kawałki siatki poniżej brzucha (pewniejsze niż podział po znaku Y; wiszący ogon nie dotyka ziemi)
 ed = np.empty(len(me.edges) * 2, dtype=np.int64); me.edges.foreach_get('vertices', ed); ed = ed.reshape(-1, 2)
-cutZ = legTop - O.get('legCut', 0.03)
-par = np.arange(n)
-def find(a):
-    while par[a] != a: par[a] = par[par[a]]; a = par[a]
-    return a
-for a, b in ed[(Z[ed[:, 0]] < cutZ) & (Z[ed[:, 1]] < cutZ)]:
-    ra, rb = find(a), find(b)
-    if ra != rb: par[ra] = rb
-rootOf = np.array([find(i) for i in range(n)]); rootOf[Z >= cutZ] = -1
-comps = []
-for r in np.unique(rootOf[rootOf >= 0]):
-    m = rootOf == r
-    if m.sum() > n * 0.004 and Z[m].min() < 0.05 and Z[m].max() > cutZ - 0.06: comps.append(m)
+WANT = 2 if BIPED else 4
+def leg_comps(cutZ):
+    par = np.arange(n)
+    def find(a):
+        while par[a] != a: par[a] = par[par[a]]; a = par[a]
+        return a
+    for a, b in ed[(Z[ed[:, 0]] < cutZ) & (Z[ed[:, 1]] < cutZ)]:
+        ra, rb = find(a), find(b)
+        if ra != rb: par[ra] = rb
+    rootOf = np.array([find(i) for i in range(n)]); rootOf[Z >= cutZ] = -1
+    out = []
+    for r in np.unique(rootOf[rootOf >= 0]):
+        m = rootOf == r
+        if m.sum() > n * 0.004 and Z[m].min() < 0.05 and Z[m].max() > cutZ - 0.06: out.append(m)
+    return out
+# szukamy wysokości cięcia, przy której nogi są osobnymi kawałkami (brzuch bywa niżej niż wykryty)
+comps, cutZ = [], legTop - 0.03
+if LEGS:
+    for dz in ([O['legCut']] if 'legCut' in O else [0.03, 0.06, 0.1, 0.14, 0.18, 0.22]):
+        cz = legTop - dz
+        if cz < legTop * 0.45: break
+        c2 = leg_comps(cz)
+        if len(c2) > len(comps): comps, cutZ = c2, cz
+        if len(c2) >= WANT: break
 print('JOINTS', {k: [[round(float(c), 3) for c in p] for p in v] for k, v in J.items()}) if False else None
 print('LEGCOMPS', len(comps), [(int(m.sum()), round(float(X[m].mean()), 2), round(float(Y[m].mean()), 2)) for m in comps])
 J = {}               # stawy: nazwa -> (biodro, kolano, pęcina, kopyto)
